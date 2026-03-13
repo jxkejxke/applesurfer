@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="referrer" content="no-referrer-when-downgrade">
+<title>Channel Surfer</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#08102a;--bg2:#0b1230;--row-a:#101640;--row-b:#0d1338;--row-hover:#192060;--row-active:#1e2868;--border:#1a2050;--border2:#222860;--amber:#ffb000;--white:#fff;--text:#a8b4d8;--text2:#5060a0;--text3:#2a3468;--red:#cc2000;--ch-w:120px;--slot-w:160px;--row-h:56px;--tb-h:38px}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:-apple-system,'Segoe UI',Arial,sans-serif;font-size:12px}
+#splash{position:fixed;inset:0;z-index:999;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;transition:opacity .4s}
+#splash.hide{opacity:0;pointer-events:none}
+.sp-logo{font-size:clamp(32px,6vw,72px);font-weight:800;color:var(--white)}.sp-logo span{color:var(--amber)}
+.sp-sub{color:var(--text2);font-size:15px}
+.sp-btn{margin-top:28px;padding:12px 40px;background:var(--amber);color:#000;font-weight:700;font-size:15px;border:none;cursor:pointer;border-radius:3px}
+#app{width:100vw;height:100vh;display:none;flex-direction:column}
+#top{display:flex;flex-shrink:0;height:40vh;min-height:220px;border-bottom:2px solid var(--border2)}
+#player-wrap{flex:0 0 53%;position:relative;background:#000;overflow:hidden}
+#player-wrap iframe{position:absolute;inset:0;width:100%;height:100%;border:none;transition:opacity .3s}
+#nosig{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:#060c22}
+.nosig-t{font-size:18px;font-weight:700;letter-spacing:3px;color:var(--text3)}
+.nosig-s{font-size:11px;letter-spacing:2px;color:var(--text3)}
+#info{flex:1;background:var(--bg2);padding:20px 26px;display:flex;flex-direction:column;gap:6px;border-left:1px solid var(--border2);overflow:hidden}
+.info-chname{font-size:24px;font-weight:700;color:var(--white)}
+.info-title{font-size:15px;color:var(--amber);font-weight:600;line-height:1.4;margin-top:6px}
+.info-meta{font-size:12px;color:var(--text2);margin-top:4px}.info-meta b{color:var(--text)}
+#gtoggle{flex-shrink:0;height:26px;background:var(--bg2);border-top:1px solid var(--border2);border-bottom:1px solid var(--border2);display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;color:var(--text2);font-size:11px;letter-spacing:1.5px;user-select:none}
+#gtoggle:hover{background:var(--border);color:var(--text)}
+#guide{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0}
+#timebar{display:flex;flex-shrink:0;height:var(--tb-h);background:var(--bg2);border-bottom:1px solid var(--border2);overflow:hidden}
+#tb-spacer{flex-shrink:0;width:var(--ch-w);border-right:1px solid var(--border2)}
+#tb-scroll{flex:1;overflow:hidden}
+#tb-inner{display:flex;height:100%}
+.tlabel{flex-shrink:0;width:var(--slot-w);height:100%;display:flex;align-items:center;padding-left:10px;font-size:12px;font-weight:700;color:var(--text2);border-right:1px solid var(--border);white-space:nowrap}
+.tlabel.isnow{color:var(--amber)}
+#rows-wrap{flex:1;overflow:hidden}
+#rows-scroll{height:100%;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:var(--border2) transparent}
+#rows-scroll::-webkit-scrollbar{width:4px}
+#rows-scroll::-webkit-scrollbar-thumb{background:var(--border2)}
+.ch-row{display:flex;height:var(--row-h);border-bottom:1px solid var(--border);cursor:pointer}
+.ch-row:nth-child(odd){background:var(--row-a)}.ch-row:nth-child(even){background:var(--row-b)}
+.ch-row:hover{background:var(--row-hover)}.ch-row.is-active{background:var(--row-active)}
+.ch-label{flex-shrink:0;width:var(--ch-w);display:flex;flex-direction:column;justify-content:center;padding:4px 8px;border-right:1px solid var(--border2);gap:1px}
+.ch-num{font-size:20px;font-weight:700;color:var(--amber);line-height:1}
+.ch-name{font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:.4px;line-height:1.3;word-break:break-word}
+.ch-slots{flex:1;display:flex;position:relative;overflow:hidden}
+.slot{flex-shrink:0;height:100%;border-right:1px solid var(--border);display:flex;align-items:center;padding:0 7px;overflow:hidden;cursor:pointer;transition:background .1s}
+.slot:hover{background:rgba(255,176,0,.07)}.slot.is-now{background:rgba(255,176,0,.04)}
+.slot-t{font-size:11px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%;pointer-events:none}
+.slot.is-now .slot-t,.is-active .slot.is-now .slot-t{color:var(--amber);font-weight:600}
+.now-line{position:absolute;top:0;bottom:0;width:2px;background:var(--red);z-index:10;pointer-events:none;box-shadow:0 0 8px rgba(200,0,0,.6)}
+#statusbar{flex-shrink:0;height:32px;background:#060c22;border-top:1px solid var(--border2);display:flex;align-items:center;padding:0 14px;gap:14px}
+.sb-logo{font-weight:800;font-size:13px;color:var(--white)}
+.sb-dot{width:8px;height:8px;border-radius:50%;background:var(--amber);animation:sbp 1.5s ease-in-out infinite;flex-shrink:0}
+@keyframes sbp{0%,100%{opacity:1}50%{opacity:.3}}
+.sb-txt{font-size:11px;color:var(--text2)}
+.sb-sep{width:1px;height:14px;background:var(--border2)}
+.sb-right{margin-left:auto;display:flex;gap:10px}
+.sb-btn{font-size:11px;color:var(--text2);cursor:pointer;border:1px solid var(--border2);padding:2px 8px;border-radius:2px;transition:all .15s}
+.sb-btn:hover{border-color:var(--amber);color:var(--amber)}
+</style>
+</head>
+<body>
+<div id="splash">
+  <div class="sp-logo">Channel <span>Surfer</span></div>
+  <div class="sp-sub">Watch YouTube Like It's Cable TV</div>
+  <button class="sp-btn" onclick="startApp()">▶ PRESS TO START</button>
+</div>
+<div id="app">
+  <div id="top">
+    <div id="player-wrap">
+      <div id="nosig"><div class="nosig-t">NO SIGNAL</div><div class="nosig-s">SELECT A CHANNEL BELOW</div></div>
+    </div>
+    <div id="info">
+      <div class="info-chname" id="info-chname">Channel Surfer</div>
+      <div class="info-title" id="info-title">Select a channel to start watching</div>
+      <div class="info-meta" id="info-meta"></div>
+    </div>
+  </div>
+  <div id="gtoggle" onclick="toggleGuide()"><span id="gi">↑</span>&nbsp;<span id="gt">HIDE GUIDE</span></div>
+  <div id="guide">
+    <div id="timebar"><div id="tb-spacer"></div><div id="tb-scroll"><div id="tb-inner"></div></div></div>
+    <div id="rows-wrap"><div id="rows-scroll"><div id="rows-inner"></div></div></div>
+  </div>
+  <div id="statusbar">
+    <div class="sb-logo">📺 CHANNEL SURFER</div>
+    <div class="sb-dot"></div>
+    <div class="sb-txt" id="sb-w">70 watching</div>
+    <div class="sb-sep"></div>
+    <div class="sb-txt">▲▼ Tune &nbsp;·&nbsp; Click to Expand &nbsp;·&nbsp; G: Guide</div>
+    <div class="sb-right"><div class="sb-btn" onclick="toggleGuide()">G: GUIDE</div></div>
+  </div>
+</div>
+<script>
+const CHANNELS = [
+  {num:2,name:"AI & ML",v:[
+    {id:"aircAruvnKk",t:"Neural Networks: Zero to Hero"},{id:"ysEB8b2SBBM",t:"But what is a neural network?"},
+    {id:"kYB8IZa5AuE",t:"Transformers Explained"},{id:"zjkBMFhNj_g",t:"Intro to Large Language Models"},
+    {id:"gWsa6DlTiz0",t:"How AI Image Generators Work"},{id:"R9OHn5ZF4Uo",t:"AlphaGo — The Movie"},
+    {id:"5C_HPTJg5ek",t:"AI in 2024 — Year in Review"},{id:"OFS90-FX6pg",t:"The moment AI becomes smarter than us"},
+    {id:"SfCa1HQMkuw",t:"What Is ChatGPT Doing?"},{id:"kopoLzvh5jY",t:"AI Safety — A Primer"}]},
+  {num:3,name:"AUTO & GARAGE",v:[
+    {id:"6cBeBhzEa8g",t:"Rebuilding a Wrecked Lamborghini"},{id:"bX1T1bJaLkg",t:"I Bought a Broken McLaren"},
+    {id:"7QpgY6FHPZY",t:"Engine Swap in 24 Hours"},{id:"vS2nRe275fQ",t:"How to Rebuild a Car Engine"},
+    {id:"FQ4gXLpPBmQ",t:"LS Swap Everything"},{id:"bP36WKXY4qE",t:"Cheapest Lamborghini Ever"},
+    {id:"lR8Y1jxHBPk",t:"Drift Car Build from Scratch"},{id:"iHVKNGJ2hH4",t:"Turbo Install on V8"},
+    {id:"gVPCPv6RRQY",t:"World Fastest Car Build"},{id:"mPwxay_Zqgc",t:"Carbon Fiber Hood Build"}]},
+  {num:4,name:"BOOKS & IDEAS",v:[
+    {id:"lsWndfzuOc4",t:"How to Read More Books"},{id:"K2sc_ck5BZU",t:"The Philosophy of Stoicism"},
+    {id:"XbL-65xEBnQ",t:"The Secret to Learning Anything"},{id:"o8NPllzkFhE",t:"Psychology of Human Misjudgment"},
+    {id:"ZiYmHBVS-IM",t:"How to Take Smart Notes"},{id:"oHAyis3n9oA",t:"The Science of Thinking"},
+    {id:"arj7oStGLkU",t:"How to Focus"},{id:"MBRqu0YOH14",t:"Atomic Habits Summary"},
+    {id:"D9Ihs241zeg",t:"Flow State Explained"},{id:"HhGuXCuDb1U",t:"Why You Should Read Dostoevsky"}]},
+  {num:5,name:"CITY & INFRASTRUCTURE",v:[
+    {id:"VNITBsHGZs8",t:"Why City Design is Broken"},{id:"IFjD3NMv6Kw",t:"How Highways Destroyed Cities"},
+    {id:"A96nPwjQn4w",t:"The World's Worst Railway"},{id:"PKeFBMOTFuM",t:"Why Japan's Trains Run on Time"},
+    {id:"ORzNZUeUHAM",t:"The Engineering of Skyscrapers"},{id:"tpxMEBl33H0",t:"Why Google Maps Fails"},
+    {id:"jV4gTAxFOSQ",t:"How Underground Cities Work"},{id:"7bCTiLOq1Zc",t:"The Hidden World of Tunnels"},
+    {id:"YHBWpIJjpNA",t:"Why Roads Are So Expensive"},{id:"vFI8SCRDKBE",t:"Urban Planning Explained"}]},
+  {num:6,name:"CODE & DEV",v:[
+    {id:"zOjov-2OZ0E",t:"100 Days of Code"},{id:"rfscVS0vtbw",t:"Learn Python in 4 Hours"},
+    {id:"HXV3zeQKqGY",t:"SQL Tutorial for Beginners"},{id:"PkZNo7MFNFg",t:"Learn JavaScript Basics"},
+    {id:"8mAITcNt710",t:"React Tutorial for Beginners"},{id:"qw--VYLpxG4",t:"GraphQL in 100 Seconds"},
+    {id:"Ke90Tje7VS0",t:"React vs Vue vs Angular"},{id:"I3jii9x98_E",t:"The Art of Debugging"},
+    {id:"pTnEG_WGd2Q",t:"Terminal for Beginners"},{id:"Q33KBiDriJY",t:"Linux File System Explained"}]},
+  {num:7,name:"COMEDY",v:[
+    {id:"acLW1vFO-2Q",t:"Best Stand-Up Moments"},{id:"6gk7OVRWxQs",t:"John Mulaney Stand-Up"},
+    {id:"mxXkGQVN_nM",t:"Conan in Japan"},{id:"P1vqFp60_ek",t:"Best Late Night Moments 2024"},
+    {id:"6mvB8jMEyaE",t:"Nate Bargatze Full Special"},{id:"uRPlTHBeqIY",t:"Key and Peele Best Sketches"},
+    {id:"2_4Ii_nnMNM",t:"Trevor Noah Leaving Daily Show"},{id:"tMBNbwBIY0M",t:"Bo Burnham Inside Highlights"},
+    {id:"5-sfGURTAt0",t:"Hasan Minhaj Best Moments"},{id:"A5LJ_mSmkgA",t:"Best SNL Sketches"}]},
+  {num:8,name:"COOKING",v:[
+    {id:"OIYkMEA59d0",t:"Gordon Ramsay Perfect Steak"},{id:"YeJvJkjmCbA",t:"The Science of Great Pasta"},
+    {id:"xCJwINz3RaU",t:"Binging with Babish Ratatouille"},{id:"SBjQ9tuuTJQ",t:"How to Make Real Ramen"},
+    {id:"JgMvMKSb8eY",t:"Sushi Master Class"},{id:"EkJANTtKM7A",t:"Perfect Homemade Pizza"},
+    {id:"2pMBNPbCHnM",t:"French Cooking Techniques"},{id:"pbuFrqQbO14",t:"Korean BBQ at Home"},
+    {id:"f-AeYHRSj2Q",t:"Wagyu Beef — Is It Worth It?"},{id:"CuLKBUCd_Hk",t:"Fermentation Deep Dive"}]},
+  {num:9,name:"DOCUMENTARY",v:[
+    {id:"Rs_xV0oiRkg",t:"Our Planet — Earth"},{id:"v3x1tBm4k0A",t:"The Social Dilemma"},
+    {id:"aHsa7N7SPGA",t:"Seaspiracy"},{id:"yiw6_JakZFc",t:"The Last Dance Episode 1"},
+    {id:"k_GF8MXVDYQ",t:"Into the Void"},{id:"Hm3JodBR-vs",t:"Citizenfour — Snowden"},
+    {id:"VGBsddq_vd0",t:"Free Solo"},{id:"8t8tMIGQ7qg",t:"Making a Murderer"},
+    {id:"Og5qHCBBcGs",t:"Formula 1 Drive to Survive"},{id:"QhXSome0EAI",t:"Don't Look Up Behind Scenes"}]},
+  {num:10,name:"EDUCATION",v:[
+    {id:"OoJsPvmFixU",t:"How the Universe Works"},{id:"BW3gKKiTvjs",t:"How Evolution Works"},
+    {id:"Ow0lr63y4Mw",t:"The Human Brain Explained"},{id:"OfV3VNgjX9A",t:"String Theory Explained"},
+    {id:"IFPwm0e_K98",t:"How DNA Works"},{id:"1G4isv_Fylg",t:"The Big Bang"},
+    {id:"TbBHedHgdMc",t:"Plate Tectonics Explained"},{id:"FpCrY7x5nEE",t:"How Black Holes Form"},
+    {id:"gRg6-_O66k0",t:"The Ocean Explained"},{id:"kYB8IZa5AuE",t:"Quantum Computing Explained"}]},
+  {num:11,name:"FINANCE",v:[
+    {id:"PHe0bXAIuk0",t:"How the Stock Market Works"},{id:"Rm4aNLToUHs",t:"Index Funds Explained"},
+    {id:"2g-_TB-MJwQ",t:"The 2008 Financial Crisis"},{id:"FTQbiNvZqaY",t:"Warren Buffett Strategy"},
+    {id:"IIRl1lj9hMo",t:"Crypto Explained Simply"},{id:"d9HjcQGRsQQ",t:"Real Estate vs Stocks"},
+    {id:"yY96hTb8WgI",t:"How to Build Passive Income"},{id:"cNHkaOGbkwM",t:"Tax Strategies for Beginners"},
+    {id:"F3QpgXBtAddQ",t:"How to Invest as a Beginner"},{id:"Rm4aNLToUHs",t:"Dividend Investing Explained"}]},
+  {num:12,name:"FITNESS",v:[
+    {id:"sFD4sWMO9p8",t:"Full Body Workout No Equipment"},{id:"FIk7gZVDfBE",t:"How to Build Muscle"},
+    {id:"j0gY5rUNnGw",t:"The Perfect Morning Routine"},{id:"IODxDxX7oi4",t:"David Goggins Stay Hard"},
+    {id:"_SDKZN6Mi38",t:"Why You're Not Losing Weight"},{id:"vSSkDos2hzo",t:"Cold Exposure Benefits"},
+    {id:"GqpSaiFbh9I",t:"Zone 2 Cardio Explained"},{id:"9U42Bkj-FHE",t:"Perfect Pull-Up Form"},
+    {id:"Mn1P9YjFNkU",t:"Intermittent Fasting Guide"},{id:"Kxrn7A7rJgY",t:"Strength vs Hypertrophy"}]},
+  {num:13,name:"FOOD & TRAVEL",v:[
+    {id:"3ATxMHbGCGs",t:"Best Street Food in Tokyo"},{id:"mJNhXl4c2y0",t:"Eating in Vietnam"},
+    {id:"s6vjY8fGCoo",t:"Mexico City Food Guide"},{id:"pKE9AqcVi2I",t:"Best Eats in Bangkok"},
+    {id:"y30u3nyiPzo",t:"Italian Food Tour Rome"},{id:"8ycTN7jDe8Q",t:"Hidden Gems in Seoul"},
+    {id:"O6vKBqnMkBM",t:"Eating Around Istanbul"},{id:"qRJ4GHQgj8Y",t:"Street Food India Delhi"},
+    {id:"x1Ql0MiGpSQ",t:"Best Ramen in Japan"},{id:"kKk2-Gbh5rg",t:"Farm to Table Deep Dive"}]},
+  {num:14,name:"GAMING",v:[
+    {id:"KzYf0lRIqDU",t:"The History of Gaming"},{id:"e_S9VvJM1PI",t:"GTA VI Everything We Know"},
+    {id:"GqnMuJwMVuQ",t:"Elden Ring Full Playthrough"},{id:"dkJoC7gT4mw",t:"Speedrunning Explained"},
+    {id:"Qbq79BFHM7w",t:"Minecraft World Record Build"},{id:"1rMq4_ld5kM",t:"Every Console Ranked"},
+    {id:"CgDu28hNGU4",t:"The Dark History of Loot Boxes"},{id:"Wgzf8R7DLKU",t:"Retro Gaming Deep Dive"},
+    {id:"zG3SZYR2H9k",t:"Nintendo vs Sega The War"},{id:"dNbMM7KHJUM",t:"Chess Grandmaster vs AI"}]},
+  {num:15,name:"HISTORY",v:[
+    {id:"jb4T_PBfLMM",t:"The Fall of Rome Explained"},{id:"Nzj9NJsVhFM",t:"World War II in 7 Minutes"},
+    {id:"fJpCGnm1F7M",t:"The Cold War Explained"},{id:"h3P4AsF3fiA",t:"Ancient Egypt Documentary"},
+    {id:"c0dqMcPBTAQ",t:"How the Roman Empire Was Built"},{id:"GVtHrRV2LsI",t:"The Viking Age Explained"},
+    {id:"Rgo0CJZWMHI",t:"The Mongol Empire"},{id:"ARvmki9bfYU",t:"American Civil War Summary"},
+    {id:"CcxEQGZqWGM",t:"The French Revolution"},{id:"1cUcJCKEqtY",t:"How World War I Started"}]},
+  {num:16,name:"LIFESTYLE",v:[
+    {id:"BbBMdGWHnow",t:"Minimalism — A Documentary"},{id:"cHELGTDY87Q",t:"How I Became a Digital Nomad"},
+    {id:"lXkMKGKFCaw",t:"Living Off Grid Full Time"},{id:"k7TcfXtFPuI",t:"Van Life 1 Year Later"},
+    {id:"oLWgsfCa4oc",t:"Morning Routine That Changed My Life"},{id:"LGnuISANhbs",t:"How to Journal"},
+    {id:"2rNDf8nQSx4",t:"Declutter Your Life"},{id:"jx3yTxkj_LY",t:"The Art of Slow Living"},
+    {id:"vZPMRMi3JGk",t:"How to Build Better Habits"},{id:"xfCKqfNVPM4",t:"Living Simply"}]},
+  {num:17,name:"NATURE & WILDLIFE",v:[
+    {id:"6v2L2UGZJAM",t:"Planet Earth II — Cities"},{id:"4-079YIasck",t:"The Serengeti Wildlife"},
+    {id:"Lm2TjNTOVow",t:"Deep Ocean Documentary"},{id:"LmzxSmVivV0",t:"National Parks America"},
+    {id:"iGIacR1-6No",t:"Wolves of Yellowstone"},{id:"V6Wfo8JEYqQ",t:"The Amazon Rainforest"},
+    {id:"7tRBkNv-t_I",t:"Migration Africa's Great Journey"},{id:"vRTEMKlFPFo",t:"Coral Reefs Dying World"},
+    {id:"JsJxMSMkFwQ",t:"Predators of the Deep"},{id:"cxBdHwVJXZg",t:"Frozen Planet Antarctica"}]},
+  {num:18,name:"NEWS & POLITICS",v:[
+    {id:"GMnJAAlXEK8",t:"How Democracy Is Under Threat"},{id:"eD6xX50BMKA",t:"The Future of the Middle East"},
+    {id:"Y8Fco4M0-Hk",t:"Climate Policy Where Are We"},{id:"Mah-4BWMTss",t:"The US Economy Explained"},
+    {id:"lRH5oBoNZjg",t:"Understanding Modern Geopolitics"},{id:"NNkSB3VCvSE",t:"Why Polarization Is Growing"},
+    {id:"2S7FCB6v5rM",t:"Media Bias How to Spot It"},{id:"Vbv0YLzoMzE",t:"The Immigration Debate"},
+    {id:"hNDgcjVGHFs",t:"Big Tech and Regulation"},{id:"k3NBHrBMcIM",t:"The Future of NATO"}]},
+  {num:19,name:"PODCASTS",v:[
+    {id:"4GP3S7PQMMA",t:"Joe Rogan — Neil deGrasse Tyson"},{id:"BkEPLkMXoaA",t:"Huberman Lab — Sleep"},
+    {id:"DtT7-MV-gMY",t:"Andrew Huberman — Focus"},{id:"6-1Ue0FFrHI",t:"Tim Ferriss — Naval Ravikant"},
+    {id:"E4wKTaqFcHY",t:"Diary of a CEO Best Moments"},{id:"sY8aFSY2zv4",t:"Jordan Peterson — Meaning"},
+    {id:"1Y3JYVH6kFg",t:"Hidden Brain — Happiness"},{id:"mTRtdWkGXFI",t:"Freakonomics Best Episodes"},
+    {id:"Cc-NzaKITSk",t:"Sam Harris — Free Will"},{id:"6FQaRxcEpqY",t:"Lex Fridman — Best Moments"}]},
+  {num:20,name:"POP CULTURE",v:[
+    {id:"2kgZBMiUOEk",t:"Best Movies of the Decade"},{id:"k7RhxXbXMcs",t:"Taylor Swift Era's Tour Recap"},
+    {id:"bdFR0GMFLAU",t:"The Marvel Problem"},{id:"ePZ5CnX3lAw",t:"Why Reality TV Rules"},
+    {id:"VXfC3Pep6jI",t:"The Rise of Korean Pop"},{id:"S4SzvMfkNKs",t:"Best Films of 2024"},
+    {id:"Q0-WNygapLc",t:"Celebrity Culture Explained"},{id:"vxaFzY7LFZU",t:"The Streaming Wars"},
+    {id:"x07GEWfELz4",t:"Internet Culture Deep Dive"},{id:"J2iGVJCAhMs",t:"Oscar Nominees Ranked"}]},
+  {num:21,name:"POPULAR SCIENCE",v:[
+    {id:"BW3gKKiTvjs",t:"How Evolution Works"},{id:"Ow0lr63y4Mw",t:"What If We Detonated All Nukes"},
+    {id:"OfV3VNgjX9A",t:"String Theory Explained"},{id:"JXeJANDKwDc",t:"Time Explained Simply"},
+    {id:"QAa2O_8wBUQ",t:"What Is Consciousness"},{id:"pVbLlnmxIbY",t:"How Vaccines Work"},
+    {id:"4b4MUYve_U8",t:"CRISPR Gene Editing Explained"},{id:"HEoUhlesETU",t:"The Fermi Paradox"},
+    {id:"rxMcJMGrMSk",t:"What Happens When You Die"},{id:"dFCbJmgeHmA",t:"The Science of Sleep"}]},
+  {num:22,name:"PRODUCTIVITY & CAREER",v:[
+    {id:"wfKbSVTcMBs",t:"Deep Work — Cal Newport"},{id:"f-dBa1q5VXw",t:"Getting Things Done System"},
+    {id:"VsCyvRg5xwQ",t:"The Career Bet Every Engineer Must Make"},{id:"q8NmkGxBTuY",t:"How to Get a Job at Google"},
+    {id:"Bz2-49ha6DM",t:"Mastery — Robert Greene"},{id:"5MgBikgcWnY",t:"How to Network"},
+    {id:"7SNgW7H7MhI",t:"Second Brain Building a PKM"},{id:"FmpIMt95ndU",t:"How Top CEOs Plan Their Day"},
+    {id:"Pj-S1Aw5rLo",t:"Negotiating Your Salary"},{id:"1sSjqJidrKw",t:"Remote Work Productivity"}]},
+  {num:23,name:"RETRO (50S/60S/70S)",v:[
+    {id:"lpsGBGfC0WY",t:"Johnny Carson Best Moments"},{id:"F5pgG3oB77s",t:"The Twilight Zone Classic"},
+    {id:"HoSCMRdwDTo",t:"1960s Commercials Compilation"},{id:"W0DMGMbAHCw",t:"The Ed Sullivan Show"},
+    {id:"gMT2fRfn2Fg",t:"Classic American Drive-Ins"},{id:"A_qN4BX7kv4",t:"The Andy Griffith Show Best"},
+    {id:"pE53BDBrUZc",t:"I Love Lucy Classics"},{id:"xLWFVaWT3Vw",t:"1970s America Documentary"},
+    {id:"eFgornd2i8E",t:"Clutch Cargo Original Episodes"},{id:"J2NLdS6kBLY",t:"Howdy Doody Episodes"}]},
+  {num:24,name:"MUSIC",v:[
+    {id:"9bZkp7q19f0",t:"PSY — Gangnam Style"},{id:"JGwWNGJdvx8",t:"Ed Sheeran — Shape of You"},
+    {id:"h_D3VFfhvs4",t:"Luis Fonsi — Despacito"},{id:"fRh_vgS2dFE",t:"Justin Bieber — Sorry"},
+    {id:"kffacxfA7G4",t:"Bruno Mars — Uptown Funk"},{id:"hT_nvWreIhg",t:"OneRepublic — Counting Stars"},
+    {id:"nfWlot6h_JM",t:"Wiz Khalifa — See You Again"},{id:"09R8_2nJtjg",t:"Miley Cyrus — Wrecking Ball"},
+    {id:"OPf0YbXqDm0",t:"Maroon 5 — Sugar"},{id:"RgKAFK5djSk",t:"Mark Ronson — Uptown Funk"}]},
+  {num:25,name:"MUSIC 2020S",v:[
+    {id:"H5v3kku4y6Q",t:"Olivia Rodrigo — drivers license"},{id:"cNd3WBYW7mg",t:"The Weeknd — Blinding Lights"},
+    {id:"Vy5bChUJVDc",t:"Harry Styles — As It Was"},{id:"6JnGBs88sL0",t:"Dua Lipa — Levitating"},
+    {id:"uelHwf8o7_U",t:"Billie Eilish — Happier Than Ever"},{id:"MXndBmhAo6Q",t:"Bad Bunny — Me Porto Bonito"},
+    {id:"g9kSByCnWhA",t:"Taylor Swift — Anti-Hero"},{id:"SXiSVQZh9pQ",t:"Lizzo — About Damn Time"},
+    {id:"dDCkrMDDSKs",t:"Glass Animals — Heat Waves"},{id:"CevxZvSJLk8",t:"Justin Bieber — Peaches"}]},
+  {num:26,name:"MUSIC 2010-20",v:[
+    {id:"YqeW9_5kURI",t:"Adele — Rolling in the Deep"},{id:"pRpeEdMmmQ0",t:"Pharrell Williams — Happy"},
+    {id:"OPf0YbXqDm0",t:"Maroon 5 — Sugar"},{id:"1wYNFfgrXCo",t:"Cardi B — Bodak Yellow"},
+    {id:"FJfFZqTlWrQ",t:"Drake — God's Plan"},{id:"kffacxfA7G4",t:"Bruno Mars — Uptown Funk"},
+    {id:"hT_nvWreIhg",t:"OneRepublic — Counting Stars"},{id:"09R8_2nJtjg",t:"Miley Cyrus — Wrecking Ball"},
+    {id:"bo_efYLyLDc",t:"Adele — Hello"},{id:"nfWlot6h_JM",t:"Wiz Khalifa — See You Again"}]},
+  {num:27,name:"MUSIC 2000S",v:[
+    {id:"1w7OgIMMRc4",t:"Eminem — Lose Yourself"},{id:"YR5ApYxkU-U",t:"Linkin Park — In the End"},
+    {id:"fJ9rUzIMcZQ",t:"Outkast — Hey Ya"},{id:"8UVNT4wvIGY",t:"Beyonce — Crazy in Love"},
+    {id:"a0ZDpFaAF0s",t:"Jay-Z — 99 Problems"},{id:"OMDmb1GCdM0",t:"Nelly — Hot in Herre"},
+    {id:"M1F1RxkMCB0",t:"Destiny's Child — Survivor"},{id:"eVTXPUF4Oz4",t:"50 Cent — In Da Club"},
+    {id:"4fndeDfaWCg",t:"Coldplay — The Scientist"},{id:"3JWTaaS7LdU",t:"Alicia Keys — Fallin"}]},
+  {num:28,name:"MUSIC 90S",v:[
+    {id:"1w7OgIMMRc4",t:"Nirvana — Smells Like Teen Spirit"},{id:"YR5ApYxkU-U",t:"Backstreet Boys — I Want It That Way"},
+    {id:"fJ9rUzIMcZQ",t:"Spice Girls — Wannabe"},{id:"CmXJmrZDPEY",t:"TLC — Waterfalls"},
+    {id:"0ytoUuO-qvg",t:"Tupac — California Love"},{id:"8UVNT4wvIGY",t:"Whitney Houston — I Will Always Love You"},
+    {id:"OMDmb1GCdM0",t:"Alanis Morissette — Ironic"},{id:"3e-0T0VXKL4",t:"Dr Dre — Still D.R.E."},
+    {id:"eVTXPUF4Oz4",t:"Oasis — Wonderwall"},{id:"4fndeDfaWCg",t:"Red Hot Chili Peppers — Under the Bridge"}]},
+  {num:29,name:"MUSIC 80S",v:[
+    {id:"btPJPFnesV4",t:"Michael Jackson — Billie Jean"},{id:"q3zqJs7JUCQ",t:"Madonna — Like a Prayer"},
+    {id:"rY_1DXKBSG8",t:"Prince — When Doves Cry"},{id:"v1c2OfAzca8",t:"A-ha — Take On Me"},
+    {id:"vNRKOR8q0HY",t:"Cyndi Lauper — Girls Just Want to Have Fun"},{id:"fmBaQhNoJVU",t:"Queen — Radio Ga Ga"},
+    {id:"d54kn3oNJOw",t:"Toto — Africa"},{id:"l482T0yNkeo",t:"Journey — Don't Stop Believin"},
+    {id:"hHcyJggyW-o",t:"Bon Jovi — Livin on a Prayer"},{id:"dsxtImDVMig",t:"Bruce Springsteen — Born in the USA"}]},
+  {num:30,name:"NATURE 4K",v:[
+    {id:"6v2L2UGZJAM",t:"Planet Earth II — 4K"},{id:"Rs_xV0oiRkg",t:"Our Planet — 4K"},
+    {id:"4-079YIasck",t:"Serengeti in 4K"},{id:"Lm2TjNTOVow",t:"Deep Ocean 4K"},
+    {id:"V6Wfo8JEYqQ",t:"Amazon Rainforest 4K"},{id:"iGIacR1-6No",t:"Wolves of Yellowstone 4K"},
+    {id:"cxBdHwVJXZg",t:"Frozen Planet 4K"},{id:"JsJxMSMkFwQ",t:"Ocean Predators 4K"},
+    {id:"7tRBkNv-t_I",t:"Africa Migration 4K"},{id:"vRTEMKlFPFo",t:"Coral Reefs 4K"}]},
+  {num:31,name:"POP CULTURE",v:[
+    {id:"J2iGVJCAhMs",t:"Every 2026 Oscar Nominee Interview | Vanity Fair"},{id:"2kgZBMiUOEk",t:"Best Movies of the Decade"},
+    {id:"k7RhxXbXMcs",t:"Taylor Swift Era's Tour Recap"},{id:"bdFR0GMFLAU",t:"The Marvel Problem"},
+    {id:"ePZ5CnX3lAw",t:"Why Reality TV Rules"},{id:"VXfC3Pep6jI",t:"The Rise of Korean Pop"},
+    {id:"S4SzvMfkNKs",t:"Best Films of 2025"},{id:"Q0-WNygapLc",t:"Celebrity Culture Explained"},
+    {id:"vxaFzY7LFZU",t:"The Streaming Wars"},{id:"x07GEWfELz4",t:"Internet Culture Deep Dive"}]},
+  {num:32,name:"POPULAR SCIENCE",v:[
+    {id:"BW3gKKiTvjs",t:"Asbestos is a bigger problem than we thought"},{id:"Ow0lr63y4Mw",t:"My robotic club won't let you..."},
+    {id:"OfV3VNgjX9A",t:"Why is this task so difficult for..."},{id:"JXeJANDKwDc",t:"Amplifying Inventions"},
+    {id:"QAa2O_8wBUQ",t:"The Internet Was Weeks Away From Disaster"},{id:"pVbLlnmxIbY",t:"How Vaccines Work"},
+    {id:"4b4MUYve_U8",t:"CRISPR Gene Editing Explained"},{id:"HEoUhlesETU",t:"The Fermi Paradox"},
+    {id:"rxMcJMGrMSk",t:"What Happens When You Die"},{id:"dFCbJmgeHmA",t:"The Science of Sleep"}]},
+  {num:33,name:"PRODUCTIVITY & CAREER",v:[
+    {id:"VsCyvRg5xwQ",t:"The Career Bet Every Engineer Must Make"},{id:"wfKbSVTcMBs",t:"Deep Work Cal Newport"},
+    {id:"f-dBa1q5VXw",t:"Master Gemini for Work"},{id:"q8NmkGxBTuY",t:"3 Ways to Learn Faster"},
+    {id:"Bz2-49ha6DM",t:"It's Finally Happening"},{id:"5MgBikgcWnY",t:"Top 6 AI Trends"},
+    {id:"7SNgW7H7MhI",t:"gpt-5.4 is really good"},{id:"FmpIMt95ndU",t:"How Top CEOs Plan Their Day"},
+    {id:"Pj-S1Aw5rLo",t:"Negotiating Your Salary"},{id:"1sSjqJidrKw",t:"Remote Work Productivity"}]},
+  {num:34,name:"RETRO (50S/60S/70S)",v:[
+    {id:"lpsGBGfC0WY",t:"Johnny Learns His M..."},{id:"F5pgG3oB77s",t:"Clutch Cargo Season..."},
+    {id:"HoSCMRdwDTo",t:"1061 Santa A..."},{id:"W0DMGMbAHCw",t:"The Terror of Tiny Town (1938)"},
+    {id:"gMT2fRfn2Fg",t:"Lady Frankenstein 1971 Full Movie"},{id:"A_qN4BX7kv4",t:"Classic 1950s TV"},
+    {id:"pE53BDBrUZc",t:"I Love Lucy Classics"},{id:"xLWFVaWT3Vw",t:"1970s America"},
+    {id:"eFgornd2i8E",t:"Classic Cartoons 1960s"},{id:"J2NLdS6kBLY",t:"Vintage Commercials"}]},
+  {num:35,name:"RETRO TECH",v:[
+    {id:"BtgOFOmMXHQ",t:"What's on the Dead Grandma Tapes?"},{id:"NXpA86HzHIs",t:"LAVA LAMPS Giant Mini and Neo"},
+    {id:"4b4MUYve_U8",t:"Funeral Tapes — Music to be..."},{id:"HEoUhlesETU",t:"This cassette player is built into..."},
+    {id:"rxMcJMGrMSk",t:"The Xbox 360 Two Decades Later — LGR Retrospective"},{id:"dFCbJmgeHmA",t:"Old Computer Restoration"},
+    {id:"y0tKL1T7wFo",t:"Vintage Radio Repair"},{id:"UCy0tKL1T7w",t:"CRT Television Explained"},
+    {id:"BtgOFOmMXHQ",t:"The History of the PC"},{id:"NXpA86HzHIs",t:"Dial-Up Internet Sounds"}]},
+  {num:36,name:"SPACE",v:[
+    {id:"OoJsPvmFixU",t:"The Universe Is Racing..."},{id:"SFajrTcEjSM",t:"Artemis Update Feb 27 2026"},
+    {id:"nI8El-unT3Y",t:"Could the Sun..."},{id:"kYB8IZa5AuE",t:"How the Euclid T..."},
+    {id:"FpCrY7x5nEE",t:"Building the new LEGO rocket"},{id:"gRg6-_O66k0",t:"How Black Holes Form"},
+    {id:"1G4isv_Fylg",t:"Boron... The Universe Tried"},{id:"TbBHedHgdMc",t:"What Is Dark Matter"},
+    {id:"IFPwm0e_K98",t:"Are We Alone in the Universe"},{id:"BW3gKKiTvjs",t:"James Webb Telescope Results"}]},
+  {num:37,name:"SPORTS",v:[
+    {id:"M7lc1UVf-VE",t:"NBA Nightly Recap"},{id:"5e3bXtCFhbk",t:"ROCKETS at NUG..."},
+    {id:"fQFxaAOI5w4",t:"Free Agency Frenzy Day 3"},{id:"FNQRMGqPqXQ",t:"Top World..."},
+    {id:"0Q9-bVVGM6A",t:"Team U..."},{id:"3XVLbNDl-5Y",t:"Highlights f..."},
+    {id:"t9bNcB-m-YQ",t:"Maxx Crosby back to the Ra..."},{id:"U0TEr6SxoLo",t:"Stephe..."},
+    {id:"u17K8rC87l4",t:"Ka..."},{id:"FNQRMGqPqXQ",t:"Top World Sports Moments"}]},
+  {num:38,name:"TECH & GADGETS",v:[
+    {id:"1ZZ_7SSVTJM",t:"Building the world's largest..."},{id:"R7yfISlGLNU",t:"TikTok Tech Tips are TERR..."},
+    {id:"Piq6qrMOB4g",t:"Samsung..."},{id:"6v2L2UGZJAM",t:"We Filmed Our Studio Like an Episode of The Office"},
+    {id:"aircAruvnKk",t:"Macbo..."},{id:"ysEB8b2SBBM",t:"DIY infinity c..."},
+    {id:"kYB8IZa5AuE",t:"Best Gadgets of 2025"},{id:"zjkBMFhNj_g",t:"iPhone 17 Review"},
+    {id:"gWsa6DlTiz0",t:"The Best Budget Laptop"},{id:"R9OHn5ZF4Uo",t:"Apple Vision Pro — 1 Year Later"}]},
+  {num:39,name:"TRAVEL",v:[
+    {id:"3ATxMHbGCGs",t:"Understanding Christian..."},{id:"mJNhXl4c2y0",t:"We Visited Unbelievable Places in China"},
+    {id:"s6vjY8fGCoo",t:"China Built the World's Highest L..."},{id:"pKE9AqcVi2I",t:"Cappad..."},
+    {id:"y30u3nyiPzo",t:"NEVE..."},{id:"8ycTN7jDe8Q",t:"Amsterd..."},
+    {id:"O6vKBqnMkBM",t:"China is Living in 2050"},{id:"qRJ4GHQgj8Y",t:"Hidden Japan"},
+    {id:"x1Ql0MiGpSQ",t:"Best Hiking Trails in the World"},{id:"kKk2-Gbh5rg",t:"Backpacking Southeast Asia"}]},
+  {num:40,name:"WORLD NEWS",v:[
+    {id:"GMnJAAlXEK8",t:"Morning News NOW Full Episode — March 12"},{id:"eD6xX50BMKA",t:"Bren..."},
+    {id:"Y8Fco4M0-Hk",t:"BUNK..."},{id:"Mah-4BWMTss",t:"LIVE: Beirut skyline as Israel intensifies attacks on Lebanon"},
+    {id:"lRH5oBoNZjg",t:"World News Tonight"},{id:"NNkSB3VCvSE",t:"Breaking News"},
+    {id:"2S7FCB6v5rM",t:"The Daily News Roundup"},{id:"Vbv0YLzoMzE",t:"Global Affairs"},
+    {id:"hNDgcjVGHFs",t:"International Headlines"},{id:"k3NBHrBMcIM",t:"Late Night News"}]},
+  {num:100,name:"89 BUILT",v:[
+    {id:"7QpgY6FHPZY",t:"NATE'S First Four W..."},{id:"iHVKNGJ2hH4",t:"Headers Are TIGHT! Drive Line's Are Perfect!"},
+    {id:"gVPCPv6RRQY",t:"Deadlines Create Disaster's. Honda Timing chain Stretch..."},{id:"mPwxay_Zqgc",t:"DIY Transmission Table! FREE Landfill Fin..."},
+    {id:"bP36WKXY4qE",t:"This 5.3 Has A New Home! C10..."},{id:"lR8Y1jxHBPk",t:"Engine Build"},
+    {id:"6cBeBhzEa8g",t:"Chassis Fabbing"},{id:"bX1T1bJaLkg",t:"Suspension Install"},
+    {id:"FQ4gXLpPBmQ",t:"Body Work Day"},{id:"1EzQLuEyAMQ",t:"Final Assembly"}]},
+  {num:101,name:"AMMO NYC",v:[
+    {id:"1ZZ_7SSVTJM",t:"STOP Scratching Your Car! ..."},{id:"R7yfISlGLNU",t:"STOP Scratching Your Car! ..."},
+    {id:"Piq6qrMOB4g",t:"STOP Scratching Your Car! ..."},{id:"BtgOFOmMXHQ",t:"STOP Scratching Your Car! ..."},
+    {id:"NXpA86HzHIs",t:"STOP Scratching Your Car! ..."},{id:"4b4MUYve_U8",t:"STOP Scratching Your Car! ..."},
+    {id:"HEoUhlesETU",t:"STOP Scratching Your Car! ..."},{id:"rxMcJMGrMSk",t:"STOP Scratching Your Car! ..."},
+    {id:"dFCbJmgeHmA",t:"STOP Scratching Your Car! ..."},{id:"1G4isv_Fylg",t:"How to Polish Paint"}]},
+  {num:102,name:"ADAM SAVAGE'S TESTED",v:[
+    {id:"BtgOFOmMXHQ",t:"Terminator ..."},{id:"NXpA86HzHIs",t:"Were T..."},
+    {id:"4b4MUYve_U8",t:"How C-3PO Was Origi..."},{id:"HEoUhlesETU",t:"Ad..."},
+    {id:"rxMcJMGrMSk",t:"Adam Savage Reviews Pr..."},{id:"dFCbJmgeHmA",t:"Adam Savage's Most Ambitious Paint Job"},
+    {id:"1G4isv_Fylg",t:"Making a Chair Stay a..."},{id:"TbBHedHgdMc",t:"The Infam..."},
+    {id:"IFPwm0e_K98",t:"One Day Build"},{id:"BW3gKKiTvjs",t:"Model Making Masterclass"}]},
+  {num:105,name:"ALMAZANKITCHEN",v:[
+    {id:"OIYkMEA59d0",t:"🔥 Ping Ga..."},{id:"YeJvJkjmCbA",t:"You've NEV..."},
+    {id:"xCJwINz3RaU",t:"CR..."},{id:"SBjQ9tuuTJQ",t:"🔥 Ping Ga..."},
+    {id:"JgMvMKSb8eY",t:"You've NEV..."},{id:"EkJANTtKM7A",t:"CR..."},
+    {id:"2pMBNPbCHnM",t:"🔥 Ping Ga..."},{id:"CuLKBUCd_Hk",t:"You've NEV..."},
+    {id:"pbuFrqQbO14",t:"Cooking in the Wild"},{id:"f-AeYHRSj2Q",t:"Forest Kitchen"}]},
+  {num:107,name:"BIKES AND BEARDS",v:[
+    {id:"bX1T1bJaLkg",t:"I Bought the Cheapest Motorcycle at MECUM Auction"},{id:"6cBeBhzEa8g",t:"I Bought a $3500 Motorcycle Powered Swamp Bug..."},
+    {id:"7QpgY6FHPZY",t:"I Am Selling All My Motorcycles- MAJOR LIFE CHANGES!"},{id:"iHVKNGJ2hH4",t:"I Bought the Cheapest Motorcycle at MECUM Auction"},
+    {id:"gVPCPv6RRQY",t:"Motorcycle Rebuild"},{id:"mPwxay_Zqgc",t:"Engine Rebuild"},
+    {id:"bP36WKXY4qE",t:"Trail Riding"},{id:"lR8Y1jxHBPk",t:"Cafe Racer Build"},
+    {id:"FQ4gXLpPBmQ",t:"Dirt Bike Restoration"},{id:"1EzQLuEyAMQ",t:"Chopper Build"}]},
+  {num:110,name:"BRYSON DECHAMBEAU",v:[
+    {id:"M7lc1UVf-VE",t:"Can I Break 50 wi..."},{id:"5e3bXtCFhbk",t:"Bryson DeChambeau vs 3 Failed Professional Golfers"},
+    {id:"fQFxaAOI5w4",t:"Can I Break 50 with Carlos Alcaraz?"},{id:"FNQRMGqPqXQ",t:"1 Pro Golfer vs 5 Kids"},
+    {id:"0Q9-bVVGM6A",t:"Long Drive Challenge"},{id:"3XVLbNDl-5Y",t:"Course Vlog"},
+    {id:"t9bNcB-m-YQ",t:"Putting Practice"},{id:"U0TEr6SxoLo",t:"Iron Play"},
+    {id:"u17K8rC87l4",t:"Driver Distance Test"},{id:"FNQRMGqPqXQ",t:"Golf Tips"}]},
+  {num:111,name:"CADDIE ISSUES GOLF",v:[
+    {id:"M7lc1UVf-VE",t:"Caddie issues golf is live!"},{id:"5e3bXtCFhbk",t:"Caddie issues golf is live!"},
+    {id:"fQFxaAOI5w4",t:"Caddie issues golf is live!"},{id:"FNQRMGqPqXQ",t:"Caddie issues golf is live!"},
+    {id:"0Q9-bVVGM6A",t:"Golf Course Vlog"},{id:"3XVLbNDl-5Y",t:"Golf Tips"},
+    {id:"t9bNcB-m-YQ",t:"Putting Tips"},{id:"U0TEr6SxoLo",t:"Golf Challenge"},
+    {id:"u17K8rC87l4",t:"Golf Swing Analysis"},{id:"FNQRMGqPqXQ",t:"Golf Round"}]},
+  {num:112,name:"CAR WIZARD",v:[
+    {id:"bX1T1bJaLkg",t:"This Lotus ..."},{id:"6cBeBhzEa8g",t:"Shop Update: Workin..."},
+    {id:"7QpgY6FHPZY",t:"This Civic Si's Clutch i..."},{id:"iHVKNGJ2hH4",t:"Grand Cherokee ..."},
+    {id:"gVPCPv6RRQY",t:"Why Hoovie's Merced..."},{id:"mPwxay_Zqgc",t:"Does a Reliable Hyundai A..."},
+    {id:"bP36WKXY4qE",t:"Nissan Murano CVT ..."},{id:"lR8Y1jxHBPk",t:"Toyota Tacom..."},
+    {id:"FQ4gXLpPBmQ",t:"My Audi R8's Repair Bill"},{id:"1EzQLuEyAMQ",t:"Cheap Car Challenge"}]},
+  {num:113,name:"CARSANDCAMERAS",v:[
+    {id:"bX1T1bJaLkg",t:"We Turned Our Tern..."},{id:"6cBeBhzEa8g",t:"We Bought a GIGANTIC 4 Cylinder Engine from the Military Surplus"},
+    {id:"7QpgY6FHPZY",t:"We Built a Harley Davidson Powered Go Kart (1200cc)"},{id:"iHVKNGJ2hH4",t:"Reviving Our 4 ENGINE 4WD GO KART (84...)"},
+    {id:"gVPCPv6RRQY",t:"Go Kart Build"},{id:"mPwxay_Zqgc",t:"Engine Swap"},
+    {id:"bP36WKXY4qE",t:"Off Road Adventure"},{id:"lR8Y1jxHBPk",t:"Burnout Machine"},
+    {id:"FQ4gXLpPBmQ",t:"Turbo Go Kart"},{id:"1EzQLuEyAMQ",t:"Snowmobile Swap"}]},
+  {num:114,name:"CASEYS CUSTOMS",v:[
+    {id:"bX1T1bJaLkg",t:"WORLDS CHEAPEST PORSCHE BUILD GETS ..."},{id:"6cBeBhzEa8g",t:"BUDGET PORSCHE CHASSIS SWAP ON A MIATA! BUI..."},
+    {id:"7QpgY6FHPZY",t:"PORSCHE CHASSIS SWAP ON A MIATA! CHEAP ..."},{id:"iHVKNGJ2hH4",t:"CHEAPEST PAINT JOB EVER! $50 DOLLAR TRACTOR PAINT"},
+    {id:"gVPCPv6RRQY",t:"Miata Build"},{id:"mPwxay_Zqgc",t:"Budget Sports Car"},
+    {id:"bP36WKXY4qE",t:"Track Prep"},{id:"lR8Y1jxHBPk",t:"Suspension Setup"},
+    {id:"FQ4gXLpPBmQ",t:"Engine Tune"},{id:"1EzQLuEyAMQ",t:"Race Day"}]},
+  {num:116,name:"CHILI KLAUS",v:[
+    {id:"OIYkMEA59d0",t:"Chili tasting with Stand-Up Co..."},{id:"YeJvJkjmCbA",t:"Chili tasting with Stand-Up Co..."},
+    {id:"xCJwINz3RaU",t:"Chili tasting with Stand-Up Co..."},{id:"SBjQ9tuuTJQ",t:"Chili tasting with Stand-Up Co..."},
+    {id:"JgMvMKSb8eY",t:"Chili tasting with Stand-Up Co..."},{id:"EkJANTtKM7A",t:"Chili tasting with Stand-Up Co..."},
+    {id:"2pMBNPbCHnM",t:"World's Hottest Chili"},{id:"CuLKBUCd_Hk",t:"Chili Challenge"},
+    {id:"pbuFrqQbO14",t:"Ghost Pepper Test"},{id:"f-AeYHRSj2Q",t:"Carolina Reaper Challenge"}]},
+  {num:127,name:"FAB RATS",v:[
+    {id:"bX1T1bJaLkg",t:"Thieves Just Ruined My Day...."},{id:"6cBeBhzEa8g",t:"Racing The Clock Before Glamis — And It's BACKFIRING!"},
+    {id:"7QpgY6FHPZY",t:"FROZEN Roads Leave Th..."},{id:"iHVKNGJ2hH4",t:"Did We Just Do All This For Nothing?"},
+    {id:"gVPCPv6RRQY",t:"I Drove 370 Miles To Pick This"},{id:"mPwxay_Zqgc",t:"Sand Rail Build"},
+    {id:"bP36WKXY4qE",t:"Desert Racing"},{id:"lR8Y1jxHBPk",t:"Buggy Build"},
+    {id:"FQ4gXLpPBmQ",t:"Off Road Carnage"},{id:"1EzQLuEyAMQ",t:"Glamis Dunes"}]},
+  {num:129,name:"FINNEGAN'S GARAGE",v:[
+    {id:"bX1T1bJaLkg",t:"We Swapped a Modded $10000 T56 Transmission On The Side of ..."},{id:"6cBeBhzEa8g",t:"THE ROTSUN AND BLASPHEMI RUN FASTER THAN EVER!"},
+    {id:"7QpgY6FHPZY",t:"We built a Rollbar For My Neighbor's '64 ..."},{id:"iHVKNGJ2hH4",t:"The Caddy Is Back!"},
+    {id:"gVPCPv6RRQY",t:"Rotsun Lives"},{id:"mPwxay_Zqgc",t:"Blasphemi Build"},
+    {id:"bP36WKXY4qE",t:"Drag Racing"},{id:"lR8Y1jxHBPk",t:"Road Trip"},
+    {id:"FQ4gXLpPBmQ",t:"Engine Swap"},{id:"1EzQLuEyAMQ",t:"Burnout"}]},
+  {num:130,name:"FLYING SPARKS GARAGE",v:[
+    {id:"bX1T1bJaLkg",t:"Restoration ..."},{id:"6cBeBhzEa8g",t:"First start in 30+ years on a 53 White WC!"},
+    {id:"7QpgY6FHPZY",t:"Modernizing our 53 Peterbilt from the cab, BACK!"},{id:"iHVKNGJ2hH4",t:"Semi Truck Restore"},
+    {id:"gVPCPv6RRQY",t:"Old Truck Revival"},{id:"mPwxay_Zqgc",t:"Engine Rebuild"},
+    {id:"bP36WKXY4qE",t:"Cab Restoration"},{id:"lR8Y1jxHBPk",t:"Paint and Body"},
+    {id:"FQ4gXLpPBmQ",t:"Interior Restoration"},{id:"1EzQLuEyAMQ",t:"First Drive"}]},
+  {num:132,name:"GAS MONKEY GARAGE",v:[
+    {id:"bX1T1bJaLkg",t:"Gas Monkey's EV Chopper Is The Co..."},{id:"6cBeBhzEa8g",t:"Mama Tried Isn't Ready For Gas Monkey's Killer 7..."},
+    {id:"7QpgY6FHPZY",t:"Rick Fairless Was SHOCKED By Our 70's..."},{id:"iHVKNGJ2hH4",t:"We're Taking A EV Chopper To Mama Tried... And It's Abs..."},
+    {id:"gVPCPv6RRQY",t:"I'm Turning This 70's..."},{id:"mPwxay_Zqgc",t:"Custom Build"},
+    {id:"bP36WKXY4qE",t:"Auction Find"},{id:"lR8Y1jxHBPk",t:"Restoration"},
+    {id:"FQ4gXLpPBmQ",t:"Hot Rod Build"},{id:"1EzQLuEyAMQ",t:"Reveal Day"}]},
+  {num:134,name:"GET HANDS DIRTY",v:[
+    {id:"bX1T1bJaLkg",t:"2 in 1 Tool Cabinet to Ma..."},{id:"6cBeBhzEa8g",t:"2 in 1 Tool Cabinet to Maxi..."},
+    {id:"7QpgY6FHPZY",t:"2 in 1 Tool Cabinet to Maxi..."},{id:"iHVKNGJ2hH4",t:"2 in 1 Tool Cabinet to Maxi..."},
+    {id:"gVPCPv6RRQY",t:"Workshop Build"},{id:"mPwxay_Zqgc",t:"Tool Storage"},
+    {id:"bP36WKXY4qE",t:"Workbench Build"},{id:"lR8Y1jxHBPk",t:"Garage Organization"},
+    {id:"FQ4gXLpPBmQ",t:"DIY Storage"},{id:"1EzQLuEyAMQ",t:"Shop Upgrade"}]},
+  {num:136,name:"GUGA FOODS",v:[
+    {id:"OIYkMEA59d0",t:"$1 v..."},{id:"YeJvJkjmCbA",t:"I tried my #1 Mo..."},
+    {id:"xCJwINz3RaU",t:"I Aged Steaks i..."},{id:"SBjQ9tuuTJQ",t:"I Tested 7 Ways to Make Sho..."},
+    {id:"JgMvMKSb8eY",t:"I tried EVERY Tradit..."},{id:"EkJANTtKM7A",t:"I soaked Stea..."},
+    {id:"2pMBNPbCHnM",t:"From $1 to $1000 Noodl..."},{id:"CuLKBUCd_Hk",t:"I soaked St..."},
+    {id:"pbuFrqQbO14",t:"$1 vs $1000 Rice Bowl"},{id:"f-AeYHRSj2Q",t:"Wagyu Experiment"}]},
+  {num:138,name:"GUGA FOODS",v:[
+    {id:"OIYkMEA59d0",t:"$1 v..."},{id:"YeJvJkjmCbA",t:"I tried my #1 Mo..."},
+    {id:"xCJwINz3RaU",t:"I Aged Steaks i..."},{id:"SBjQ9tuuTJQ",t:"I Tested 7 Ways"},
+    {id:"JgMvMKSb8eY",t:"Best Steak Method"},{id:"EkJANTtKM7A",t:"Dry Age Experiment"},
+    {id:"2pMBNPbCHnM",t:"$1 vs $1000 Steak"},{id:"CuLKBUCd_Hk",t:"I soaked St..."},
+    {id:"pbuFrqQbO14",t:"$1 vs $1000 Rice Bowl"},{id:"f-AeYHRSj2Q",t:"Wagyu Challenge"}]},
+  {num:144,name:"JAY LENO'S GARAGE",v:[
+    {id:"bX1T1bJaLkg",t:"The $25K EV T..."},{id:"6cBeBhzEa8g",t:"Why This Young Ferrari Mechani..."},
+    {id:"7QpgY6FHPZY",t:"The $25K EV Truck You Can Repair Yoursel..."},{id:"iHVKNGJ2hH4",t:"Why This Young Ferrari Mechani..."},
+    {id:"gVPCPv6RRQY",t:"Rare Car Collection"},{id:"mPwxay_Zqgc",t:"Classic Car Review"},
+    {id:"bP36WKXY4qE",t:"Supercar Drive"},{id:"lR8Y1jxHBPk",t:"Vintage Motorcycle"},
+    {id:"FQ4gXLpPBmQ",t:"EV vs Classic"},{id:"1EzQLuEyAMQ",t:"Car History"}]},
+  {num:150,name:"JOHN MALECKI",v:[
+    {id:"bX1T1bJaLkg",t:"I Surprised My Pregnant Wife With A Desk"},{id:"6cBeBhzEa8g",t:"I Let My Employees' Build Their Dream Office"},
+    {id:"7QpgY6FHPZY",t:"I Surprised My Pregnant Wife With A Desk"},{id:"iHVKNGJ2hH4",t:"I Let My Employees' Build Their Dream Office"},
+    {id:"gVPCPv6RRQY",t:"Woodworking Build"},{id:"mPwxay_Zqgc",t:"Furniture Making"},
+    {id:"bP36WKXY4qE",t:"Workshop Project"},{id:"lR8Y1jxHBPk",t:"DIY Furniture"},
+    {id:"FQ4gXLpPBmQ",t:"Shop Build"},{id:"1EzQLuEyAMQ",t:"Home Project"}]},
+  {num:151,name:"JOHN MALECKI UNSCREWED",v:[
+    {id:"bX1T1bJaLkg",t:"I Bought Illegal Amazon Products"},{id:"6cBeBhzEa8g",t:"I Bought The Dumbest TikTok Shop Truck Acc..."},
+    {id:"7QpgY6FHPZY",t:"I Tested Unbreakable Product Claims"},{id:"iHVKNGJ2hH4",t:"I Bought Products My Subscribers Told Me To"},
+    {id:"gVPCPv6RRQY",t:"Amazon Product Test"},{id:"mPwxay_Zqgc",t:"Viral Product Review"},
+    {id:"bP36WKXY4qE",t:"As Seen on TV"},{id:"lR8Y1jxHBPk",t:"TikTok Shop Review"},
+    {id:"FQ4gXLpPBmQ",t:"Budget Tool Test"},{id:"1EzQLuEyAMQ",t:"Cheap vs Expensive"}]},
+  {num:154,name:"JUNKYARD DIGS",v:[
+    {id:"bX1T1bJaLkg",t:"Will a CLAPPED OUT Farm Truck RUN and DRIVE 400 miles in WINTER!?"},{id:"6cBeBhzEa8g",t:"Will this WILD 1960's Snowmobile RUN and RIDE After YEARS of Neglect??"},
+    {id:"7QpgY6FHPZY",t:"Will a RUSTED Ranchero Ru..."},{id:"iHVKNGJ2hH4",t:"Junkyard Find"},
+    {id:"gVPCPv6RRQY",t:"Barn Find Revival"},{id:"mPwxay_Zqgc",t:"Forgotten Car"},
+    {id:"bP36WKXY4qE",t:"Rescue Mission"},{id:"lR8Y1jxHBPk",t:"Abandoned Vehicle"},
+    {id:"FQ4gXLpPBmQ",t:"Scrapyard Score"},{id:"1EzQLuEyAMQ",t:"First Start in Years"}]},
+  {num:158,name:"KILL TONY",v:[
+    {id:"acLW1vFO-2Q",t:"KT #759 — JOE LIST + STEVE RANNAZZISI"},{id:"6gk7OVRWxQs",t:"KT #758 — DONNELL RAWLINGS + TREVOR WALLACE"},
+    {id:"A5LJ_mSmkgA",t:"KT #757 Best Moments"},{id:"mxXkGQVN_nM",t:"KT #756 Highlights"},
+    {id:"P1vqFp60_ek",t:"Tony Hinchcliffe Best Bits"},{id:"tMBNbwBIY0M",t:"Kill Tony Live"},
+    {id:"5-sfGURTAt0",t:"Best Open Mic Moments"},{id:"6mvB8jMEyaE",t:"Roast Battle"},
+    {id:"2_4Ii_nnMNM",t:"Crowd Work"},{id:"uRPlTHBeqIY",t:"Best of Kill Tony"}]},
+  {num:163,name:"PRIMITIVE TECH",v:[
+    {id:"6v2L2UGZJAM",t:"Primitive Tech — Hut"},{id:"4-079YIasck",t:"Primitive Tech — Forge Blower"},
+    {id:"Lm2TjNTOVow",t:"Primitive Tech — Charcoal"},{id:"LmzxSmVivV0",t:"Primitive Tech — Iron"},
+    {id:"iGIacR1-6No",t:"Primitive Tech — Fired Bricks"},{id:"V6Wfo8JEYqQ",t:"Primitive Tech — Wattle and Daub"},
+    {id:"7tRBkNv-t_I",t:"Primitive Tech — Tiled Roof"},{id:"vRTEMKlFPFo",t:"Primitive Tech — Forge"},
+    {id:"JsJxMSMkFwQ",t:"Primitive Tech — Bow and Arrow"},{id:"cxBdHwVJXZg",t:"Primitive Tech — Water Mill"}]},
+  {num:169,name:"SIMONE GIERTZ",v:[
+    {id:"BtgOFOmMXHQ",t:"This lamp cha..."},{id:"NXpA86HzHIs",t:"A fruit bowl tha..."},
+    {id:"4b4MUYve_U8",t:"This lamp change..."},{id:"HEoUhlesETU",t:"A fruit bowl tha..."},
+    {id:"rxMcJMGrMSk",t:"This lamp change..."},{id:"dFCbJmgeHmA",t:"Useless Machine Build"},
+    {id:"1G4isv_Fylg",t:"Shitty Robot"},{id:"TbBHedHgdMc",t:"The Truckla"},
+    {id:"IFPwm0e_K98",t:"Breakfast Machine"},{id:"BW3gKKiTvjs",t:"Every Day Calendar"}]},
+  {num:171,name:"VICE GRIP LODGE",v:[
+    {id:"bX1T1bJaLkg",t:"Vice Grip Garage Cars And Coffee..."},{id:"6cBeBhzEa8g",t:"Vice Grip Garage Cars And Coffee..."},
+    {id:"7QpgY6FHPZY",t:"Vice Grip Garage Cars And Coffee..."},{id:"iHVKNGJ2hH4",t:"Vice Grip Garage Cars And Coffee..."},
+    {id:"gVPCPv6RRQY",t:"Barn Find"},{id:"mPwxay_Zqgc",t:"Abandoned Car"},
+    {id:"bP36WKXY4qE",t:"Rescue"},{id:"lR8Y1jxHBPk",t:"Restoration"},
+    {id:"FQ4gXLpPBmQ",t:"First Start"},{id:"1EzQLuEyAMQ",t:"Road Trip"}]},
+  {num:173,name:"WATCHJRGO",v:[
+    {id:"bX1T1bJaLkg",t:"BMW GAVE UP AF..."},{id:"6cBeBhzEa8g",t:"SAVED FROM THE CRU..."},
+    {id:"7QpgY6FHPZY",t:"I TOTALED MY NEW BE..."},{id:"iHVKNGJ2hH4",t:"I BROUGHT MY DAD IN TO FINISH MY 2ND JEEP I RESCUED F..."},
+    {id:"gVPCPv6RRQY",t:"DRIVING THE FASTES..."},{id:"mPwxay_Zqgc",t:"HONDA BUILT AN IM..."},
+    {id:"bP36WKXY4qE",t:"ABANDONED JEEP GRAN..."},{id:"lR8Y1jxHBPk",t:"Jeep Build"},
+    {id:"FQ4gXLpPBmQ",t:"Salvage Rebuild"},{id:"1EzQLuEyAMQ",t:"Totaled Car Fix"}]},
+  {num:174,name:"WESTEN CHAMPLIN",v:[
+    {id:"bX1T1bJaLkg",t:"Testing ..."},{id:"6cBeBhzEa8g",t:"We Built a Corvette into a S..."},
+    {id:"7QpgY6FHPZY",t:"NEW Westen Headquar..."},{id:"iHVKNGJ2hH4",t:"Westen Champlin — Cheap Car Challenge"},
+    {id:"gVPCPv6RRQY",t:"I Built a Backwards Cop Car To Confuse Police"},{id:"mPwxay_Zqgc",t:"Testing Saw Blades"},
+    {id:"bP36WKXY4qE",t:"Truck Challenge"},{id:"lR8Y1jxHBPk",t:"Speed Record"},
+    {id:"FQ4gXLpPBmQ",t:"Diesel Swap"},{id:"1EzQLuEyAMQ",t:"Burnout Machine"}]},
+  {num:177,name:"WHISTLINDIESEL",v:[
+    {id:"bX1T1bJaLkg",t:"Toyota Land-Cruiser Durability Test #1"},{id:"6cBeBhzEa8g",t:"The WhistlinDiesel Wooden Car Challenge (Part 1)"},
+    {id:"7QpgY6FHPZY",t:"I got arrest..."},{id:"iHVKNGJ2hH4",t:"Toyota Land-Cruiser Durability Test #1"},
+    {id:"gVPCPv6RRQY",t:"Destruction Test"},{id:"mPwxay_Zqgc",t:"Truck Torture"},
+    {id:"bP36WKXY4qE",t:"Will It Survive"},{id:"lR8Y1jxHBPk",t:"Extreme Offroad"},
+    {id:"FQ4gXLpPBmQ",t:"Monster Truck"},{id:"1EzQLuEyAMQ",t:"Crazy Stunt"}]},
+  {num:182,name:"PAIGE SPIRANAC",v:[
+    {id:"M7lc1UVf-VE",t:"Morning Vlog 🌞 Getting ready, ..."},{id:"5e3bXtCFhbk",t:"My HUGE Ne..."},
+    {id:"fQFxaAOI5w4",t:"Morning Vlog 🌞 Getting ready, ..."},{id:"FNQRMGqPqXQ",t:"My HUGE Ne..."},
+    {id:"0Q9-bVVGM6A",t:"Golf Tips for Beginners"},{id:"3XVLbNDl-5Y",t:"Course Vlog"},
+    {id:"t9bNcB-m-YQ",t:"Golf Swing Tips"},{id:"U0TEr6SxoLo",t:"Fitness Routine"},
+    {id:"u17K8rC87l4",t:"Golf Challenge"},{id:"FNQRMGqPqXQ",t:"Pro Golf Tips"}]},
+  {num:199,name:"SARAH-N-TUNED",v:[
+    {id:"bX1T1bJaLkg",t:"Rumors Ruin Cars / 2026 ..."},{id:"6cBeBhzEa8g",t:"The British Hellcat / 2026 Ast..."},
+    {id:"7QpgY6FHPZY",t:"The Paint Booth Col..."},{id:"iHVKNGJ2hH4",t:"Give Us The Diesel! / 2..."},
+    {id:"gVPCPv6RRQY",t:"Is Old Stuff ACTUAL..."},{id:"mPwxay_Zqgc",t:"Is Tech Ruining Cars? / 20..."},
+    {id:"bP36WKXY4qE",t:"This Part Wasn't Cutt..."},{id:"lR8Y1jxHBPk",t:"Seriously Goo..."},
+    {id:"FQ4gXLpPBmQ",t:"Hellcat Swap"},{id:"1EzQLuEyAMQ",t:"Car Opinions"}]},
+  {num:204,name:"SIMONE GIERTZ",v:[
+    {id:"BtgOFOmMXHQ",t:"This lamp cha..."},{id:"NXpA86HzHIs",t:"A fruit bowl tha..."},
+    {id:"4b4MUYve_U8",t:"This lamp change..."},{id:"HEoUhlesETU",t:"A fruit bowl tha..."},
+    {id:"rxMcJMGrMSk",t:"This lamp change..."},{id:"dFCbJmgeHmA",t:"Home Improvement"},
+    {id:"1G4isv_Fylg",t:"Robot Build"},{id:"TbBHedHgdMc",t:"Hack a Day"},
+    {id:"IFPwm0e_K98",t:"Invention"},{id:"BW3gKKiTvjs",t:"Every Day Calendar"}]},
+  {num:220,name:"VICE GRIP LODGE",v:[
+    {id:"bX1T1bJaLkg",t:"Vice Grip Garage Cars And Coffee..."},{id:"6cBeBhzEa8g",t:"Vice Grip Garage Cars And Coffee..."},
+    {id:"7QpgY6FHPZY",t:"Vice Grip Garage Cars And Coffee..."},{id:"iHVKNGJ2hH4",t:"Vice Grip Garage Cars And Coffee..."},
+    {id:"gVPCPv6RRQY",t:"Cars and Coffee Event"},{id:"mPwxay_Zqgc",t:"Abandoned Car Find"},
+    {id:"bP36WKXY4qE",t:"Barn Find"},{id:"lR8Y1jxHBPk",t:"Road Trip"},
+    {id:"FQ4gXLpPBmQ",t:"Restoration"},{id:"1EzQLuEyAMQ",t:"First Start"}]},
+  {num:221,name:"WD DETAILING",v:[
+    {id:"1ZZ_7SSVTJM",t:"ABANDONED Ford Galaxie Parked 3..."},{id:"R7yfISlGLNU",t:"Father Surprised With His Corvette C..."},
+    {id:"Piq6qrMOB4g",t:"First Wash in 30 Years: Ford Mod..."},{id:"BtgOFOmMXHQ",t:"First Wash in 37 YEARS: AMC Javelin..."},
+    {id:"NXpA86HzHIs",t:"Wife Sees Deceased Husband's Cad..."},{id:"4b4MUYve_U8",t:"Daughter..."},
+    {id:"HEoUhlesETU",t:"Detail Job"},{id:"rxMcJMGrMSk",t:"Car Transformation"},
+    {id:"dFCbJmgeHmA",t:"Paint Correction"},{id:"1G4isv_Fylg",t:"Full Detail"}]},
+  {num:222,name:"WATCHJRGO",v:[
+    {id:"bX1T1bJaLkg",t:"BMW GAVE UP AF..."},{id:"6cBeBhzEa8g",t:"SAVED FROM THE CRU..."},
+    {id:"7QpgY6FHPZY",t:"I TOTALED MY NEW BE..."},{id:"iHVKNGJ2hH4",t:"I BROUGHT MY DAD TO FINISH MY JEEP"},
+    {id:"gVPCPv6RRQY",t:"DRIVING THE FASTEST..."},{id:"mPwxay_Zqgc",t:"HONDA BUILT AN IMPOSSIBLE..."},
+    {id:"bP36WKXY4qE",t:"ABANDONED JEEP GRAND..."},{id:"lR8Y1jxHBPk",t:"Jeep Build"},
+    {id:"FQ4gXLpPBmQ",t:"Salvage Title Rebuild"},{id:"1EzQLuEyAMQ",t:"Totaled Car"}]},
+  {num:223,name:"WESTEN CHAMPLIN",v:[
+    {id:"bX1T1bJaLkg",t:"Testing ..."},{id:"6cBeBhzEa8g",t:"We Built a Corvette into a S..."},
+    {id:"7QpgY6FHPZY",t:"NEW Westen Headquar..."},{id:"iHVKNGJ2hH4",t:"Cheap Car Challenge"},
+    {id:"gVPCPv6RRQY",t:"I Built a Backwards Cop Car"},{id:"mPwxay_Zqgc",t:"Testing Saw Blades"},
+    {id:"bP36WKXY4qE",t:"Big Truck"},{id:"lR8Y1jxHBPk",t:"Speed Test"},
+    {id:"FQ4gXLpPBmQ",t:"Diesel Power"},{id:"1EzQLuEyAMQ",t:"Stunt Car"}]},
+  {num:225,name:"WHEELS THROUGH TIME",v:[
+    {id:"bX1T1bJaLkg",t:"I Bought A Motorcycle Built By Bob Ross!"},{id:"6cBeBhzEa8g",t:"I Opened A Can Of Worms When I Bought This Motorcycle..."},
+    {id:"7QpgY6FHPZY",t:"I Bought A Motorcycle Built By Bob Ross!"},{id:"iHVKNGJ2hH4",t:"I Opened A Can Of Worms..."},
+    {id:"gVPCPv6RRQY",t:"Rare Motorcycle"},{id:"mPwxay_Zqgc",t:"Vintage Bike"},
+    {id:"bP36WKXY4qE",t:"Museum Collection"},{id:"lR8Y1jxHBPk",t:"Classic Motorcycle"},
+    {id:"FQ4gXLpPBmQ",t:"Barn Find Bike"},{id:"1EzQLuEyAMQ",t:"Restoration"}]},
+  {num:226,name:"WHISTLINDIESEL",v:[
+    {id:"bX1T1bJaLkg",t:"Toyota Land-Cruiser Durability Test #1"},{id:"6cBeBhzEa8g",t:"The WhistlinDiesel Wooden Car Challenge"},
+    {id:"7QpgY6FHPZY",t:"I got arrest..."},{id:"iHVKNGJ2hH4",t:"Land Cruiser Test"},
+    {id:"gVPCPv6RRQY",t:"Destruction Test"},{id:"mPwxay_Zqgc",t:"Truck Torture Test"},
+    {id:"bP36WKXY4qE",t:"Will It Survive"},{id:"lR8Y1jxHBPk",t:"Extreme Off-Road"},
+    {id:"FQ4gXLpPBmQ",t:"Monster Truck Madness"},{id:"1EzQLuEyAMQ",t:"Crazy Stunt"}]},
+];
+
+// ── SCHEDULE (deterministic) ──
+const SLOT_MS = 30*60*1000, SLOTS = 18, SLOT_PX = 160;
+function seed(id){return id.split('').reduce((a,c,i)=>a+c.charCodeAt(0)*(i+7),0)}
+function getSchedule(ch,nowMs){
+  const vs=ch.v; if(!vs.length) return null;
+  const s=seed(ch.num+'');
+  // Absolute slot index since midnight, offset by channel seed
+  const dayMs=Math.floor(nowMs/86400000)*86400000;
+  const slotOfDay=Math.floor((nowMs-dayMs)/SLOT_MS);
+  const vi=(slotOfDay+s)%vs.length;
+  return {v:vs[vi], startSec:0};
+}
+function getGuide(ch,startMs){
+  const vs=ch.v; if(!vs.length) return Array(SLOTS+2).fill('');
+  const s=seed(ch.num+'');
+  // For each slot in the guide, compute absolute slot-of-day then pick video
+  return Array.from({length:SLOTS+2},(_,i)=>{
+    const ms=startMs+i*SLOT_MS;
+    const dayMs=Math.floor(ms/86400000)*86400000;
+    const slotOfDay=Math.floor((ms-dayMs)/SLOT_MS);
+    return vs[(slotOfDay+s)%vs.length].t;
+  });
+}
+function snapSlot(ms){return Math.floor(ms/SLOT_MS)*SLOT_MS}
+function fmtTime(ms){const d=new Date(ms);let h=d.getHours(),m=d.getMinutes();const ap=h>=12?'PM':'AM';h=h%12||12;return`${h}:${String(m).padStart(2,'0')} ${ap}`}
+function fmtClock(){const d=new Date();let h=d.getHours(),m=d.getMinutes(),s=d.getSeconds();const ap=h>=12?'PM':'AM';h=h%12||12;return`${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')} ${ap}`}
+
+// ── STATE ──
+let activeCh=null, guideOpen=true, nowMs=Date.now(), guideStart=snapSlot(Date.now())-SLOT_MS;
+function nowPx(){return((nowMs-guideStart)/SLOT_MS)*SLOT_PX}
+
+// ── TIMEBAR ──
+function renderTimebar(){
+  const el=document.getElementById('tb-inner'); el.innerHTML='';
+  for(let i=0;i<SLOTS+2;i++){
+    const t=guideStart+i*SLOT_MS, isNow=(t<=nowMs&&nowMs<t+SLOT_MS);
+    const d=document.createElement('div');
+    d.className='tlabel'+(isNow?' isnow':'');
+    d.style.width=SLOT_PX+'px';
+    d.textContent=(isNow?'▶ ':'')+fmtTime(t);
+    el.appendChild(d);
+  }
+}
+
+// ── ROWS ──
+function renderRows(){
+  const inner=document.getElementById('rows-inner'); inner.innerHTML='';
+  CHANNELS.forEach(ch=>{
+    const row=document.createElement('div');
+    row.className='ch-row'+(activeCh?.num===ch.num?' is-active':'');
+    row.dataset.num=ch.num;
+    row.innerHTML=`<div class="ch-label"><div class="ch-num">${ch.num}</div><div class="ch-name">${ch.name}</div></div>`;
+    const slots=document.createElement('div'); slots.className='ch-slots';
+    const titles=getGuide(ch,guideStart);
+    for(let i=0;i<SLOTS+2;i++){
+      const t=guideStart+i*SLOT_MS, isNow=(t<=nowMs&&nowMs<t+SLOT_MS);
+      const s=document.createElement('div');
+      s.className='slot'+(isNow?' is-now':'');
+      s.style.width=SLOT_PX+'px';
+      const txt=document.createElement('div'); txt.className='slot-t'; txt.textContent=titles[i]||''; txt.title=titles[i]||'';
+      s.appendChild(txt); s.addEventListener('click',()=>tune(ch)); slots.appendChild(s);
+    }
+    const line=document.createElement('div'); line.className='now-line'; line.style.left=nowPx()+'px';
+    slots.appendChild(line); row.appendChild(slots);
+    row.addEventListener('click',()=>tune(ch)); inner.appendChild(row);
+  });
+}
+
+// ── TUNE ──
+function tune(ch){
+  activeCh=ch; renderRows();
+  document.getElementById('info-chname').textContent=ch.name;
+  document.getElementById('info-title').textContent='Tuning...';
+  document.getElementById('info-meta').textContent='Ch '+ch.num;
+  const wrap=document.getElementById('player-wrap');
+  document.getElementById('nosig').style.display='flex';
+  const old=wrap.querySelector('iframe'); if(old) old.remove();
+  const sched=getSchedule(ch,Date.now());
+  if(!sched){document.getElementById('info-title').textContent='No videos'; return;}
+  document.getElementById('info-title').textContent='"'+sched.v.t+'"';
+  document.getElementById('info-meta').innerHTML='<b>'+fmtClock()+'</b> &nbsp; Ch '+ch.num+' — '+ch.name;
+  document.getElementById('nosig').style.display='none';
+  const iframe=document.createElement('iframe');
+  // rel=0 keeps related videos from same channel, end param not supported via embed
+  // playlist trick enables looping so video restarts instead of showing end screen
+  iframe.src=`https://www.youtube-nocookie.com/embed/${sched.v.id}?autoplay=1&start=0&controls=1&modestbranding=1&rel=0&iv_load_policy=3&loop=1&playlist=${sched.v.id}&origin=${encodeURIComponent(location.origin||'https://channelsurfer.tv')}`;
+  iframe.setAttribute('referrerpolicy','no-referrer-when-downgrade');
+  iframe.allow='autoplay; encrypted-media; fullscreen; picture-in-picture';
+  iframe.allowFullscreen=true; iframe.style.opacity='0'; iframe.style.transition='opacity .3s';
+  wrap.appendChild(iframe); requestAnimationFrame(()=>requestAnimationFrame(()=>iframe.style.opacity='1'));
+  watchForPlayerError(ch);
+}
+
+// ── GUIDE TOGGLE ──
+function toggleGuide(){
+  guideOpen=!guideOpen;
+  document.getElementById('guide').style.display=guideOpen?'flex':'none';
+  document.getElementById('gi').textContent=guideOpen?'↑':'↓';
+  document.getElementById('gt').textContent=guideOpen?'HIDE GUIDE':'SHOW GUIDE';
+}
+
+// ── KEYBOARD ──
+document.addEventListener('keydown',e=>{
+  if(e.key==='g'||e.key==='G'){toggleGuide();return;}
+  if(e.key==='ArrowUp'||e.key==='ArrowDown'){
+    e.preventDefault();
+    const idx=activeCh?CHANNELS.findIndex(c=>c.num===activeCh.num):0;
+    const next=e.key==='ArrowUp'?Math.max(0,idx-1):Math.min(CHANNELS.length-1,idx+1);
+    tune(CHANNELS[next]);
+    setTimeout(()=>document.querySelector(`.ch-row[data-num="${CHANNELS[next].num}"]`)?.scrollIntoView({block:'nearest',behavior:'smooth'}),50);
+  }
+});
+
+// ── GAMEPAD (Apple TV) ──
+let gps={};
+(function poll(){
+  const pads=navigator.getGamepads?navigator.getGamepads():[];
+  for(const p of pads){if(!p)continue;
+    [[0,'Enter'],[12,'ArrowUp'],[13,'ArrowDown'],[14,'ArrowLeft'],[15,'ArrowRight']].forEach(([b,k])=>{
+      const on=p.buttons[b]?.pressed;
+      if(on&&!gps[b])document.dispatchEvent(new KeyboardEvent('keydown',{key:k}));
+      gps[b]=on;
+    });
+    const ay=p.axes[1]||0;
+    if(ay<-0.6&&!gps.u){document.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowUp'}));gps.u=true;}else if(ay>=-0.6)gps.u=false;
+    if(ay>0.6&&!gps.d){document.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown'}));gps.d=true;}else if(ay<=0.6)gps.d=false;
+  }
+  requestAnimationFrame(poll);
+})();
+
+// ── TOUCH ──
+let ty=0;
+document.addEventListener('touchstart',e=>ty=e.touches[0].clientY,{passive:true});
+document.addEventListener('touchend',e=>{const d=e.changedTouches[0].clientY-ty;if(d<-50)document.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown'}));if(d>50)document.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowUp'}));},{passive:true});
+
+// ── WATCHERS ──
+let w=Math.floor(Math.random()*80)+40;
+setInterval(()=>{w+=Math.floor(Math.random()*7)-3;w=Math.max(15,Math.min(250,w));document.getElementById('sb-w').textContent=w+' watching';},7000);
+
+// ── oEMBED VERIFICATION ──
+// Checks each video ID against YouTube's public oEmbed endpoint (no API key needed).
+// Dead/private/deleted videos return a 400/404 and get filtered out before playback.
+async function verifyVideo(id){
+  try{
+    const r=await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${id}&format=json`,{method:'GET'});
+    return r.ok;
+  }catch(e){return false;}
+}
+
+async function verifyAllChannels(onProgress){
+  // Collect all unique IDs across all channels
+  const allIds=[...new Set(CHANNELS.flatMap(ch=>ch.v.map(v=>v.id)))];
+  const good=new Set();
+  let done=0;
+  // Batch in groups of 8 to avoid hammering
+  const BATCH=8;
+  for(let i=0;i<allIds.length;i+=BATCH){
+    const batch=allIds.slice(i,i+BATCH);
+    const results=await Promise.all(batch.map(id=>verifyVideo(id).then(ok=>({id,ok}))));
+    results.forEach(r=>{ if(r.ok) good.add(r.id); });
+    done+=batch.length;
+    if(onProgress) onProgress(Math.round((done/allIds.length)*100));
+    // Small yield to keep UI responsive
+    await new Promise(res=>setTimeout(res,80));
+  }
+  // Filter each channel's video list to only verified IDs
+  CHANNELS.forEach(ch=>{
+    ch.v=ch.v.filter(v=>good.has(v.id));
+  });
+  // Remove channels with zero working videos
+  CHANNELS.splice(0,CHANNELS.length,...CHANNELS.filter(ch=>ch.v.length>0));
+}
+
+// ── IFRAME ERROR AUTO-SKIP ──
+// Disabled - was incorrectly rotating every 6 seconds
+function watchForPlayerError(ch){ /* no-op */ }
+
+// ── START ──
+async function startApp(){
+  const splash=document.getElementById('splash');
+  // Show progress during verification
+  const btn=splash.querySelector('.sp-btn');
+  btn.disabled=true; btn.textContent='Checking videos… 0%';
+
+  await verifyAllChannels(pct=>{ btn.textContent=`Checking videos… ${pct}%`; });
+
+  btn.textContent='▶ Loading…';
+  splash.classList.add('hide');
+  setTimeout(()=>splash.style.display='none',500);
+  document.getElementById('app').style.display='flex';
+  nowMs=Date.now(); guideStart=snapSlot(nowMs)-SLOT_MS;
+  renderTimebar(); renderRows();
+  setTimeout(()=>tune(CHANNELS[0]),600);
+  setInterval(()=>{
+    nowMs=Date.now();
+    // Keep guideStart anchored so "now" is always visible near left side
+    guideStart=snapSlot(nowMs)-SLOT_MS;
+    renderTimebar();
+    renderRows();
+  },15000);
+}
+</script>
+</body>
+</html>

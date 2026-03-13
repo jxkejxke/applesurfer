@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>Channel Surfer · Apple TV</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=SF+Pro+Display:wght@300;400;600;700&display=swap');
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #13131a;
+    --surface2: #1c1c28;
+    --border: #2a2a3d;
+    --accent: #0984ff;
+    --accent2: #bf5af2;
+    --text: #f5f5f7;
+    --text2: #8e8e93;
+    --text3: #48484a;
+    --red: #ff453a;
+    --green: #30d158;
+    --yellow: #ffd60a;
+    --channel-w: 340px;
+    --guide-h: 90px;
+    --focus-ring: 0 0 0 4px rgba(9,132,255,0.5), 0 8px 40px rgba(9,132,255,0.25);
+    --tv-radius: 16px;
+    --safe: 60px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, 'SF Pro Display', 'Helvetica Neue', sans-serif;
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  /* ── SPLASH ── */
+  #splash {
+    position: fixed; inset: 0; z-index: 999;
+    background: var(--bg);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 24px;
+    transition: opacity 0.6s ease;
+  }
+  #splash.hide { opacity: 0; pointer-events: none; }
+
+  .splash-logo {
+    font-size: 72px; font-weight: 700; letter-spacing: -2px;
+    background: linear-gradient(135deg, #0984ff 0%, #bf5af2 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .splash-sub { color: var(--text2); font-size: 22px; font-weight: 300; letter-spacing: 0.5px; }
+  .splash-hint {
+    margin-top: 40px; color: var(--text3); font-size: 18px;
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:.4} 50%{opacity:1} }
+
+  .tv-icon {
+    width: 120px; height: 90px;
+    border: 4px solid var(--accent); border-radius: 14px;
+    position: relative; margin-bottom: 8px;
+    background: linear-gradient(135deg, #0984ff22, #bf5af222);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .tv-icon::after {
+    content: '';
+    width: 40px; height: 4px;
+    background: var(--accent); border-radius: 2px;
+    position: absolute; bottom: -20px;
+  }
+  .tv-icon svg { width: 48px; height: 48px; opacity: 0.8; }
+
+  /* ── MAIN LAYOUT ── */
+  #app { height: 100vh; display: flex; flex-direction: column; }
+
+  /* ── TOP BAR ── */
+  #topbar {
+    display: flex; align-items: center; gap: 24px;
+    padding: 20px var(--safe) 16px;
+    background: linear-gradient(to bottom, rgba(10,10,15,0.98), transparent);
+    position: relative; z-index: 10;
+    flex-shrink: 0;
+  }
+  .logo { font-size: 28px; font-weight: 700; letter-spacing: -0.5px;
+    background: linear-gradient(135deg, #0984ff, #bf5af2);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    flex-shrink: 0;
+  }
+  .divider { width: 1px; height: 28px; background: var(--border); }
+  #now-playing-bar { flex: 1; display: flex; align-items: center; gap: 12px; overflow: hidden; }
+  .live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--red); flex-shrink: 0; animation: blink 1.2s ease-in-out infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+  .now-label { color: var(--text2); font-size: 15px; flex-shrink: 0; }
+  #now-title { font-size: 15px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .viewer-count { display: flex; align-items: center; gap: 6px; color: var(--text2); font-size: 14px; flex-shrink: 0; margin-left: auto; }
+  #clock { font-size: 22px; font-weight: 300; color: var(--text2); flex-shrink: 0; font-variant-numeric: tabular-nums; }
+
+  /* ── BODY ── */
+  #main { flex: 1; display: flex; overflow: hidden; }
+
+  /* ── VIDEO AREA ── */
+  #player-area {
+    flex: 1; position: relative; overflow: hidden;
+    background: #000;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #player-area iframe {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    border: none; pointer-events: auto;
+  }
+  /* Channel number overlay */
+  #ch-overlay {
+    position: absolute; top: var(--safe); left: var(--safe);
+    pointer-events: none;
+    opacity: 0; transition: opacity 0.3s ease;
+  }
+  #ch-overlay.show { opacity: 1; }
+  .ch-badge {
+    background: rgba(0,0,0,0.7); backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 12px; padding: 12px 20px;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .ch-num { font-size: 48px; font-weight: 700; line-height: 1; }
+  .ch-name { font-size: 16px; color: var(--text2); }
+
+  /* Static noise when switching */
+  #static {
+    position: absolute; inset: 0;
+    pointer-events: none; opacity: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.4'/%3E%3C/svg%3E");
+    background-size: 200px 200px;
+    transition: opacity 0.15s;
+  }
+  #static.show { opacity: 0.6; animation: noise 0.1s steps(3) infinite; }
+  @keyframes noise { to { background-position: 200px 200px; } }
+
+  /* No signal screen */
+  #no-signal {
+    position: absolute; inset: 0;
+    background: #050508;
+    display: none; align-items: center; justify-content: center;
+    flex-direction: column; gap: 16px; color: var(--text2);
+  }
+  #no-signal.show { display: flex; }
+  .signal-bars { display: flex; align-items: flex-end; gap: 5px; height: 40px; }
+  .signal-bar { width: 8px; background: var(--text3); border-radius: 3px; }
+  .signal-bar:nth-child(1) { height: 10px; }
+  .signal-bar:nth-child(2) { height: 18px; }
+  .signal-bar:nth-child(3) { height: 26px; }
+  .signal-bar:nth-child(4) { height: 34px; }
+  .signal-bar:nth-child(5) { height: 40px; }
+
+  /* ── GUIDE PANEL ── */
+  #guide {
+    width: var(--channel-w);
+    background: rgba(13,13,20,0.97);
+    backdrop-filter: blur(40px);
+    border-left: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+
+  #guide-header {
+    padding: 20px 20px 12px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 10px;
+    flex-shrink: 0;
+  }
+  .guide-title { font-size: 20px; font-weight: 600; letter-spacing: -0.3px; }
+  .guide-subtitle { font-size: 13px; color: var(--text2); margin-top: 2px; }
+
+  /* Category tabs */
+  #cat-tabs {
+    display: flex; gap: 0;
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto; flex-shrink: 0;
+    scrollbar-width: none;
+  }
+  #cat-tabs::-webkit-scrollbar { display: none; }
+  .cat-tab {
+    flex-shrink: 0; padding: 10px 14px;
+    font-size: 13px; color: var(--text2);
+    cursor: pointer; border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+  .cat-tab:hover { color: var(--text); }
+  .cat-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* Channel list */
+  #channel-list {
+    flex: 1; overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+  #channel-list::-webkit-scrollbar { width: 4px; }
+  #channel-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .ch-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 16px;
+    cursor: pointer;
+    border-radius: 10px; margin: 2px 8px;
+    transition: background 0.15s, transform 0.1s;
+    position: relative;
+  }
+  .ch-item:hover { background: var(--surface2); }
+  .ch-item.focused {
+    background: var(--accent);
+    box-shadow: var(--focus-ring);
+    transform: scale(1.01);
+  }
+  .ch-item.active { background: var(--surface2); }
+  .ch-item.active .ch-item-num { color: var(--accent); }
+
+  .ch-item-num {
+    font-size: 13px; color: var(--text3); font-variant-numeric: tabular-nums;
+    width: 28px; flex-shrink: 0; font-weight: 600;
+  }
+  .ch-item-icon {
+    width: 36px; height: 36px; border-radius: 8px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+    background: var(--surface2);
+  }
+  .ch-item.focused .ch-item-icon { background: rgba(255,255,255,0.15); }
+  .ch-item-info { flex: 1; overflow: hidden; }
+  .ch-item-name { font-size: 15px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ch-item-now { font-size: 12px; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+  .ch-item.focused .ch-item-now { color: rgba(255,255,255,0.7); }
+
+  .live-badge {
+    font-size: 9px; font-weight: 700; letter-spacing: 0.5px;
+    background: var(--red); color: white;
+    padding: 2px 5px; border-radius: 3px; flex-shrink: 0;
+  }
+
+  /* ── BOTTOM INFO BAR ── */
+  #infobar {
+    padding: 14px var(--safe);
+    background: linear-gradient(to top, rgba(10,10,15,0.95), transparent);
+    display: flex; align-items: center; gap: 20px;
+    flex-shrink: 0;
+  }
+  .remote-hint {
+    display: flex; align-items: center; gap: 8px;
+    color: var(--text3); font-size: 13px;
+  }
+  .key-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 26px; height: 26px; border-radius: 6px;
+    background: var(--surface2); border: 1px solid var(--border);
+    font-size: 11px; color: var(--text2);
+  }
+  .key-text { font-size: 13px; }
+
+  /* ── INFO CARD (channel detail overlay) ── */
+  #info-card {
+    position: absolute; bottom: 100px; left: var(--safe);
+    background: rgba(10,10,15,0.9); backdrop-filter: blur(20px);
+    border: 1px solid var(--border); border-radius: var(--tv-radius);
+    padding: 20px 24px; max-width: 500px;
+    opacity: 0; transform: translateY(20px);
+    transition: all 0.3s ease; pointer-events: none;
+  }
+  #info-card.show { opacity: 1; transform: translateY(0); pointer-events: auto; }
+  .info-ch-num { font-size: 13px; color: var(--text2); margin-bottom: 4px; }
+  .info-ch-name { font-size: 28px; font-weight: 700; letter-spacing: -0.5px; }
+  .info-now { margin-top: 8px; font-size: 15px; color: var(--text2); }
+  .info-up { margin-top: 4px; font-size: 13px; color: var(--text3); }
+
+  /* ── VOLUME INDICATOR ── */
+  #vol-indicator {
+    position: absolute; top: 50%; right: 80px;
+    transform: translateY(-50%);
+    background: rgba(10,10,15,0.85); backdrop-filter: blur(16px);
+    border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px 20px; display: flex; flex-direction: column; gap: 10px;
+    opacity: 0; transition: opacity 0.3s ease;
+    pointer-events: none;
+  }
+  #vol-indicator.show { opacity: 1; }
+  .vol-label { font-size: 13px; color: var(--text2); text-align: center; }
+  .vol-track { width: 8px; height: 120px; background: var(--surface2);
+    border-radius: 4px; position: relative; margin: 0 auto; }
+  .vol-fill { position: absolute; bottom: 0; left: 0; right: 0;
+    background: var(--accent); border-radius: 4px; transition: height 0.15s ease; }
+
+  /* ── SCAN ANIMATION ── */
+  .scan-line {
+    position: absolute; left: 0; right: 0; height: 2px;
+    background: linear-gradient(to right, transparent, rgba(9,132,255,0.4), transparent);
+    animation: scan 3s linear infinite;
+    pointer-events: none;
+  }
+  @keyframes scan { from{top:0} to{top:100%} }
+
+  /* Scrollbar for channel list */
+  #channel-list { padding-bottom: 12px; }
+
+  /* Focus visible */
+  .cat-tab:focus { outline: none; background: var(--surface2); color: var(--text); }
+</style>
+</head>
+<body>
+
+<!-- SPLASH -->
+<div id="splash">
+  <div class="tv-icon">
+    <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="4" y="8" width="40" height="28" rx="4" stroke="#0984ff" stroke-width="2.5"/>
+      <path d="M18 40h12M24 36v4" stroke="#0984ff" stroke-width="2.5" stroke-linecap="round"/>
+      <path d="M16 20l8-5 8 5-8 5-8-5z" fill="#0984ff" opacity="0.8"/>
+    </svg>
+  </div>
+  <div class="splash-logo">Channel Surfer</div>
+  <div class="splash-sub">Watch YouTube Like It's Cable TV</div>
+  <div class="splash-hint">Press any key or click to start</div>
+</div>
+
+<!-- MAIN APP -->
+<div id="app" style="display:none">
+  <!-- TOP BAR -->
+  <div id="topbar">
+    <div class="logo">📺 Channel Surfer</div>
+    <div class="divider"></div>
+    <div id="now-playing-bar">
+      <div class="live-dot"></div>
+      <div class="now-label">NOW ON CH</div>
+      <span id="now-ch-num" style="color:var(--accent);font-weight:600">—</span>
+      <div id="now-title">Select a channel to start watching</div>
+    </div>
+    <div class="viewer-count">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+      <span id="viewer-count">—</span>
+    </div>
+    <div id="clock">—</div>
+  </div>
+
+  <!-- MAIN BODY -->
+  <div id="main">
+    <!-- VIDEO PLAYER -->
+    <div id="player-area">
+      <div class="scan-line"></div>
+      <div id="no-signal" class="show">
+        <div class="signal-bars">
+          <div class="signal-bar"></div>
+          <div class="signal-bar"></div>
+          <div class="signal-bar"></div>
+          <div class="signal-bar"></div>
+          <div class="signal-bar"></div>
+        </div>
+        <div style="font-size:18px;color:var(--text2)">No Signal</div>
+        <div style="font-size:14px;color:var(--text3)">Choose a channel →</div>
+      </div>
+      <div id="static"></div>
+      <div id="ch-overlay">
+        <div class="ch-badge">
+          <div class="ch-num" id="overlay-num">—</div>
+          <div class="ch-name" id="overlay-name">—</div>
+        </div>
+      </div>
+      <!-- Info card -->
+      <div id="info-card">
+        <div class="info-ch-num" id="info-num">CH —</div>
+        <div class="info-ch-name" id="info-name">—</div>
+        <div class="info-now" id="info-now">—</div>
+        <div class="info-up" id="info-up"></div>
+      </div>
+    </div>
+
+    <!-- GUIDE PANEL -->
+    <div id="guide">
+      <div id="guide-header">
+        <div>
+          <div class="guide-title">TV Guide</div>
+          <div class="guide-subtitle" id="guide-count">Loading channels...</div>
+        </div>
+      </div>
+      <div id="cat-tabs"></div>
+      <div id="channel-list"></div>
+    </div>
+  </div>
+
+  <!-- BOTTOM BAR -->
+  <div id="infobar">
+    <div class="remote-hint">
+      <span class="key-badge">↑↓</span>
+      <span class="key-text" style="color:var(--text2)">Navigate</span>
+    </div>
+    <div class="remote-hint">
+      <span class="key-badge">↵</span>
+      <span class="key-text" style="color:var(--text2)">Tune In</span>
+    </div>
+    <div class="remote-hint">
+      <span class="key-badge">←→</span>
+      <span class="key-text" style="color:var(--text2)">Categories</span>
+    </div>
+    <div class="remote-hint">
+      <span class="key-badge">I</span>
+      <span class="key-text" style="color:var(--text2)">Info</span>
+    </div>
+    <div class="remote-hint">
+      <span class="key-badge">+/-</span>
+      <span class="key-text" style="color:var(--text2)">Volume</span>
+    </div>
+    <div class="remote-hint" style="margin-left:auto">
+      <span class="key-badge">G</span>
+      <span class="key-text" style="color:var(--text2)">Guide</span>
+    </div>
+  </div>
+</div>
+
+<!-- VOLUME INDICATOR -->
+<div id="vol-indicator">
+  <div class="vol-label">VOL</div>
+  <div class="vol-track"><div class="vol-fill" id="vol-fill" style="height:70%"></div></div>
+  <div class="vol-label" id="vol-num">70</div>
+</div>
+
+<script>
+// ── CHANNELS DATA ──
+const CHANNELS = [
+  // NEWS
+  { id: 1, name: "World News", cat: "News", emoji: "🌍", query: "world news today 2024", vids: ["dQw4w9WgXcQ","jNQXAC9IVRw","9bZkp7q19f0"] },
+  { id: 2, name: "Tech News", cat: "News", emoji: "💻", query: "tech news 2024", vids: ["FQM_QkPKHBE","U9mJuUkhUzk","RhU9MHM7sqk"] },
+  { id: 3, name: "Science Daily", cat: "News", emoji: "🔬", query: "science news 2024", vids: ["BW3gKKiTvjs","Ow0lr63y4Mw","OfV3VNgjX9A"] },
+  // ENTERTAINMENT
+  { id: 11, name: "Comedy Central", cat: "Entertainment", emoji: "😂", query: "stand up comedy 2024", vids: ["acLW1vFO-2Q","6gk7OVRWxQs","A5LJ_mSmkgA"] },
+  { id: 12, name: "Movie Trailers", cat: "Entertainment", emoji: "🎬", query: "official movie trailer 2024", vids: ["cxKVo8CqxLY","YoHD9XEInc0","odM92ap8_c0"] },
+  { id: 13, name: "Talk Shows", cat: "Entertainment", emoji: "🎤", query: "late night show clips 2024", vids: ["_lK4cX5xGiQ","AcDNroHBDko","9RJn5c1gFSM"] },
+  { id: 14, name: "Documentaries", cat: "Entertainment", emoji: "📽️", query: "documentary full length 2024", vids: ["VGBsddq_vd0","8t8tMIGQ7qg","v3x1tBm4k0A"] },
+  // MUSIC
+  { id: 21, name: "Pop Hits", cat: "Music", emoji: "🎵", query: "pop music video 2024", vids: ["9jK-NcRmVcw","JGwWNGJdvx8","h_D3VFfhvs4"] },
+  { id: 22, name: "Hip Hop TV", cat: "Music", emoji: "🎤", query: "hip hop rap music video 2024", vids: ["RgKAFK5djSk","nfWlot6h_JM","09R8_2nJtjg"] },
+  { id: 23, name: "Rock Channel", cat: "Music", emoji: "🎸", query: "rock music video 2024", vids: ["1w7OgIMMRc4","YR5ApYxkU-U","fJ9rUzIMcZQ"] },
+  { id: 24, name: "Chill Vibes", cat: "Music", emoji: "🌊", query: "lofi chill music 2024", vids: ["jfKfPfyJRdk","5qap5aO4i9A","lTRiuFIWV54"] },
+  { id: 25, name: "Live Concerts", cat: "Music", emoji: "🎪", query: "live concert performance 2024", vids: ["CevxZvSJLk8","M7lc1UVf-VE","YkgkThdzX-8"] },
+  // TECH
+  { id: 31, name: "AI & ML", cat: "Tech", emoji: "🤖", query: "artificial intelligence machine learning 2024", vids: ["aircAruvnKk","ysEB8b2SBBM","kYB8IZa5AuE"] },
+  { id: 32, name: "Code & Dev", cat: "Tech", emoji: "⌨️", query: "programming tutorial 2024", vids: ["zOjov-2OZ0E","rfscVS0vtbw","HXV3zeQKqGY"] },
+  { id: 33, name: "Gadgets", cat: "Tech", emoji: "📱", query: "tech gadgets review 2024", vids: ["1ZZ_7SSVTJM","R7yfISlGLNU","Piq6qrMOB4g"] },
+  { id: 34, name: "Space", cat: "Tech", emoji: "🚀", query: "space exploration NASA 2024", vids: ["OoJsPvmFixU","SFajrTcEjSM","nI8El-unT3Y"] },
+  { id: 35, name: "Retro Tech", cat: "Tech", emoji: "🖥️", query: "vintage retro technology history", vids: ["BtgOFOmMXHQ","NXpA86HzHIs","4b7N_M4Wg80"] },
+  // SPORTS
+  { id: 41, name: "Sports Highlights", cat: "Sports", emoji: "🏆", query: "sports highlights 2024", vids: ["M7lc1UVf-VE","5e3bXtCFhbk","fQFxaAOI5w4"] },
+  { id: 42, name: "Football", cat: "Sports", emoji: "🏈", query: "NFL football highlights 2024", vids: ["FNQRMGqPqXQ","0Q9-bVVGM6A","3XVLbNDl-5Y"] },
+  { id: 43, name: "Basketball", cat: "Sports", emoji: "🏀", query: "NBA basketball highlights 2024", vids: ["t9bNcB-m-YQ","U0TEr6SxoLo","u17K8rC87l4"] },
+  { id: 44, name: "Extreme Sports", cat: "Sports", emoji: "🏄", query: "extreme sports action 2024", vids: ["lZqrG1bdGtg","XAVhz2JBcWU","FARbkBT1CqU"] },
+  // GAMING
+  { id: 51, name: "Gaming", cat: "Gaming", emoji: "🎮", query: "gaming 2024 gameplay", vids: ["KzYf0lRIqDU","dQw4w9WgXcQ","e_S9VvJM1PI"] },
+  { id: 52, name: "Speedruns", cat: "Gaming", emoji: "⚡", query: "speedrun gaming world record", vids: ["yW7XfZO_2Vs","Hol8lT3_bBU","2J5mCFY2Dg0"] },
+  { id: 53, name: "Retro Gaming", cat: "Gaming", emoji: "👾", query: "retro classic video games", vids: ["_wiSYBgBm9k","D4GEzTmdPJI","pTwkl6gRKqw"] },
+  // LIFESTYLE
+  { id: 61, name: "Cooking", cat: "Lifestyle", emoji: "👨‍🍳", query: "cooking recipe tutorial 2024", vids: ["OIYkMEA59d0","YeJvJkjmCbA","xCJwINz3RaU"] },
+  { id: 62, name: "Travel", cat: "Lifestyle", emoji: "✈️", query: "travel vlog 2024", vids: ["3ATxMHbGCGs","mJNhXl4c2y0","s6vjY8fGCoo"] },
+  { id: 63, name: "Nature", cat: "Lifestyle", emoji: "🌿", query: "nature wildlife documentary 2024", vids: ["6v2L2UGZJAM","4-079YIasck","Lm2TjNTOVow"] },
+  { id: 64, name: "Fitness", cat: "Lifestyle", emoji: "💪", query: "workout fitness 2024", vids: ["sFD4sWMO9p8","FIk7gZVDfBE","j0gY5rUNnGw"] },
+];
+
+const CATS = ["All", ...new Set(CHANNELS.map(c => c.cat))];
+
+// ── STATE ──
+let currentCat = "All";
+let filteredChannels = [];
+let focusedIdx = 0;
+let activeChannelId = null;
+let volume = 70;
+let volTimer = null;
+let chOverlayTimer = null;
+let infoVisible = false;
+let guideVisible = true;
+let appStarted = false;
+
+// ── UTILS ──
+function getFilteredChannels() {
+  return currentCat === "All" ? CHANNELS : CHANNELS.filter(c => c.cat === currentCat);
+}
+
+function getRandomVideoId(channel) {
+  const idx = Math.floor(Date.now() / 300000) % channel.vids.length;
+  return channel.vids[idx];
+}
+
+function getStartOffset() {
+  return Math.floor((Date.now() / 1000) % 180);
+}
+
+// ── CLOCK ──
+function updateClock() {
+  const now = new Date();
+  const h = now.getHours().toString().padStart(2, '0');
+  const m = now.getMinutes().toString().padStart(2, '0');
+  document.getElementById('clock').textContent = `${h}:${m}`;
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ── VIEWER COUNT ──
+function updateViewerCount() {
+  const base = 847 + Math.floor(Math.random() * 200 - 100);
+  document.getElementById('viewer-count').textContent = base.toLocaleString() + ' watching';
+}
+setInterval(updateViewerCount, 8000);
+updateViewerCount();
+
+// ── RENDER GUIDE ──
+function renderCatTabs() {
+  const el = document.getElementById('cat-tabs');
+  el.innerHTML = CATS.map(cat =>
+    `<div class="cat-tab ${cat === currentCat ? 'active' : ''}" data-cat="${cat}">${cat}</div>`
+  ).join('');
+  el.querySelectorAll('.cat-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      currentCat = tab.dataset.cat;
+      focusedIdx = 0;
+      renderCatTabs();
+      renderChannelList();
+    });
+  });
+}
+
+function renderChannelList() {
+  filteredChannels = getFilteredChannels();
+  const el = document.getElementById('channel-list');
+  el.innerHTML = filteredChannels.map((ch, i) => `
+    <div class="ch-item ${ch.id === activeChannelId ? 'active' : ''} ${i === focusedIdx ? 'focused' : ''}"
+         data-idx="${i}" data-id="${ch.id}">
+      <div class="ch-item-num">${ch.id}</div>
+      <div class="ch-item-icon">${ch.emoji}</div>
+      <div class="ch-item-info">
+        <div class="ch-item-name">${ch.name}</div>
+        <div class="ch-item-now">${ch.cat}</div>
+      </div>
+      <div class="live-badge">LIVE</div>
+    </div>
+  `).join('');
+
+  document.getElementById('guide-count').textContent = `${filteredChannels.length} channels`;
+
+  el.querySelectorAll('.ch-item').forEach(item => {
+    item.addEventListener('click', () => {
+      focusedIdx = +item.dataset.idx;
+      tuneToChannel(filteredChannels[focusedIdx]);
+      renderChannelList();
+    });
+    item.addEventListener('mouseenter', () => {
+      focusedIdx = +item.dataset.idx;
+      renderChannelList();
+    });
+  });
+
+  // Scroll focused item into view
+  const focused = el.querySelector('.focused');
+  if (focused) focused.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+
+// ── TUNE TO CHANNEL ──
+function tuneToChannel(channel) {
+  activeChannelId = channel.id;
+  showStatic(() => {
+    loadVideo(channel);
+    renderChannelList();
+    showChOverlay(channel);
+    updateTopBar(channel);
+    updateInfoCard(channel);
+  });
+}
+
+function loadVideo(channel) {
+  const vid = getRandomVideoId(channel);
+  const start = getStartOffset();
+  const el = document.getElementById('player-area');
+  document.getElementById('no-signal').classList.remove('show');
+
+  // Remove existing iframe
+  const existing = el.querySelector('iframe');
+  if (existing) existing.remove();
+
+  const iframe = document.createElement('iframe');
+  // Use youtube-nocookie.com + referrerpolicy to fix Error 153
+  iframe.src = `https://www.youtube-nocookie.com/embed/${vid}?autoplay=1&controls=1&modestbranding=1&rel=0&iv_load_policy=3&start=${start}&origin=${encodeURIComponent(location.origin || 'https://channelsurfer.tv')}`;
+  iframe.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
+  iframe.allow = "autoplay; encrypted-media; fullscreen; accelerometer; gyroscope; picture-in-picture";
+  iframe.allowFullscreen = true;
+  iframe.title = channel.name;
+  el.appendChild(iframe);
+}
+
+function showStatic(callback) {
+  const s = document.getElementById('static');
+  s.classList.add('show');
+  setTimeout(() => {
+    callback();
+    setTimeout(() => s.classList.remove('show'), 200);
+  }, 300);
+}
+
+function showChOverlay(channel) {
+  const ov = document.getElementById('ch-overlay');
+  document.getElementById('overlay-num').textContent = channel.id;
+  document.getElementById('overlay-name').textContent = channel.name;
+  ov.classList.add('show');
+  clearTimeout(chOverlayTimer);
+  chOverlayTimer = setTimeout(() => ov.classList.remove('show'), 3000);
+}
+
+function updateTopBar(channel) {
+  document.getElementById('now-ch-num').textContent = channel.id;
+  document.getElementById('now-title').textContent = `${channel.emoji} ${channel.name}`;
+}
+
+function updateInfoCard(channel) {
+  document.getElementById('info-num').textContent = `CH ${channel.id}`;
+  document.getElementById('info-name').textContent = `${channel.emoji} ${channel.name}`;
+  document.getElementById('info-now').textContent = `📂 Category: ${channel.cat}`;
+  document.getElementById('info-up').textContent = `Streaming YouTube • Live`;
+}
+
+// ── VOLUME ──
+function showVolume() {
+  const v = document.getElementById('vol-indicator');
+  v.classList.add('show');
+  document.getElementById('vol-fill').style.height = volume + '%';
+  document.getElementById('vol-num').textContent = volume;
+  clearTimeout(volTimer);
+  volTimer = setTimeout(() => v.classList.remove('show'), 2000);
+}
+
+// ── KEYBOARD / REMOTE NAVIGATION ──
+document.addEventListener('keydown', e => {
+  if (!appStarted) {
+    startApp();
+    return;
+  }
+
+  switch(e.key) {
+    case 'ArrowUp':
+      e.preventDefault();
+      focusedIdx = Math.max(0, focusedIdx - 1);
+      renderChannelList();
+      break;
+    case 'ArrowDown':
+      e.preventDefault();
+      focusedIdx = Math.min(filteredChannels.length - 1, focusedIdx + 1);
+      renderChannelList();
+      break;
+    case 'ArrowLeft':
+      e.preventDefault();
+      navigateCat(-1);
+      break;
+    case 'ArrowRight':
+      e.preventDefault();
+      navigateCat(1);
+      break;
+    case 'Enter':
+      e.preventDefault();
+      if (filteredChannels[focusedIdx]) {
+        tuneToChannel(filteredChannels[focusedIdx]);
+      }
+      break;
+    case 'i':
+    case 'I':
+      infoVisible = !infoVisible;
+      document.getElementById('info-card').classList.toggle('show', infoVisible && !!activeChannelId);
+      break;
+    case 'g':
+    case 'G':
+      guideVisible = !guideVisible;
+      document.getElementById('guide').style.display = guideVisible ? 'flex' : 'none';
+      break;
+    case '+':
+    case '=':
+      volume = Math.min(100, volume + 5);
+      showVolume();
+      break;
+    case '-':
+    case '_':
+      volume = Math.max(0, volume - 5);
+      showVolume();
+      break;
+    case 'PageUp':
+      focusedIdx = Math.max(0, focusedIdx - 5);
+      renderChannelList();
+      break;
+    case 'PageDown':
+      focusedIdx = Math.min(filteredChannels.length - 1, focusedIdx + 5);
+      renderChannelList();
+      break;
+  }
+});
+
+function navigateCat(dir) {
+  const idx = CATS.indexOf(currentCat);
+  const newIdx = (idx + dir + CATS.length) % CATS.length;
+  currentCat = CATS[newIdx];
+  focusedIdx = 0;
+  renderCatTabs();
+  renderChannelList();
+}
+
+// ── START APP ──
+function startApp() {
+  appStarted = true;
+  const splash = document.getElementById('splash');
+  splash.classList.add('hide');
+  setTimeout(() => splash.style.display = 'none', 600);
+  document.getElementById('app').style.display = 'flex';
+
+  filteredChannels = getFilteredChannels();
+  renderCatTabs();
+  renderChannelList();
+}
+
+// Click splash to start
+document.getElementById('splash').addEventListener('click', startApp);
+
+// ── GAMEPAD SUPPORT (Apple TV Siri Remote via gamepad API) ──
+let gpPrev = {};
+function pollGamepad() {
+  const gps = navigator.getGamepads ? navigator.getGamepads() : [];
+  for (const gp of gps) {
+    if (!gp) continue;
+    // D-pad: buttons 12=up, 13=down, 14=left, 15=right, 0=A/select
+    const btns = [0, 12, 13, 14, 15];
+    btns.forEach(i => {
+      const pressed = gp.buttons[i] && gp.buttons[i].pressed;
+      const wasPressed = gpPrev[i];
+      if (pressed && !wasPressed) {
+        if (i === 0) document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter'}));
+        if (i === 12) document.dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowUp'}));
+        if (i === 13) document.dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowDown'}));
+        if (i === 14) document.dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowLeft'}));
+        if (i === 15) document.dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowRight'}));
+      }
+      gpPrev[i] = pressed;
+    });
+    // Analog sticks
+    if (gp.axes[1] < -0.5 && !gpPrev['up']) {
+      document.dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowUp'}));
+      gpPrev['up'] = true;
+    } else if (gp.axes[1] >= -0.5) gpPrev['up'] = false;
+    if (gp.axes[1] > 0.5 && !gpPrev['down']) {
+      document.dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowDown'}));
+      gpPrev['down'] = true;
+    } else if (gp.axes[1] <= 0.5) gpPrev['down'] = false;
+  }
+  requestAnimationFrame(pollGamepad);
+}
+requestAnimationFrame(pollGamepad);
+
+// ── TOUCH SWIPE (for Apple TV web browser touch simulation) ──
+let touchStartY = 0, touchStartX = 0;
+document.addEventListener('touchstart', e => {
+  touchStartY = e.touches[0].clientY;
+  touchStartX = e.touches[0].clientX;
+  if (!appStarted) startApp();
+}, {passive: true});
+document.addEventListener('touchend', e => {
+  const dy = e.changedTouches[0].clientY - touchStartY;
+  const dx = e.changedTouches[0].clientX - touchStartX;
+  if (Math.abs(dy) > Math.abs(dx)) {
+    if (dy < -40) document.dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowUp'}));
+    if (dy > 40) document.dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowDown'}));
+  } else {
+    if (dx < -40) document.dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowRight'}));
+    if (dx > 40) document.dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowLeft'}));
+  }
+}, {passive: true});
+</script>
+</body>
+</html>

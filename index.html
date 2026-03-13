@@ -1,0 +1,996 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="referrer" content="no-referrer-when-downgrade">
+<title>Channel Surfer</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#08102a;--bg2:#0b1230;--row-a:#101640;--row-b:#0d1338;--row-hover:#192060;--row-active:#1e2868;--border:#1a2050;--border2:#222860;--amber:#ffb000;--white:#fff;--text:#a8b4d8;--text2:#5060a0;--text3:#2a3468;--red:#cc2000;--ch-w:120px;--slot-w:160px;--row-h:56px;--tb-h:38px}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:-apple-system,'Segoe UI',Arial,sans-serif;font-size:12px}
+#splash{position:fixed;inset:0;z-index:999;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;transition:opacity .4s}
+#splash.hide{opacity:0;pointer-events:none}
+.sp-logo{font-size:clamp(32px,6vw,72px);font-weight:800;color:var(--white)}.sp-logo span{color:var(--amber)}
+.sp-sub{color:var(--text2);font-size:15px}
+.sp-bar-wrap{width:320px;max-width:80vw;height:4px;background:var(--border2);border-radius:2px;margin-top:20px;overflow:hidden}
+.sp-bar{height:100%;width:0%;background:var(--amber);transition:width .3s;border-radius:2px}
+.sp-prog{color:var(--text2);font-size:12px;margin-top:8px}
+.sp-btn{margin-top:28px;padding:12px 40px;background:var(--amber);color:#000;font-weight:700;font-size:15px;border:none;cursor:pointer;border-radius:3px;display:none}
+.sp-btn:hover{opacity:.85}
+#app{width:100vw;height:100vh;display:none;flex-direction:column}
+#top{display:flex;flex-shrink:0;height:40vh;min-height:220px;border-bottom:2px solid var(--border2)}
+#player-wrap{flex:0 0 53%;position:relative;background:#000;overflow:hidden}
+#player-wrap iframe{position:absolute;inset:0;width:100%;height:100%;border:none;transition:opacity .3s}
+#nosig{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:#060c22}
+.nosig-t{font-size:18px;font-weight:700;letter-spacing:3px;color:var(--text3)}
+.nosig-s{font-size:11px;letter-spacing:2px;color:var(--text3)}
+#info{flex:1;background:var(--bg2);padding:20px 26px;display:flex;flex-direction:column;gap:6px;border-left:1px solid var(--border2);overflow:hidden}
+.info-chname{font-size:24px;font-weight:700;color:var(--white)}
+.info-title{font-size:15px;color:var(--amber);font-weight:600;line-height:1.4;margin-top:6px}
+.info-meta{font-size:12px;color:var(--text2);margin-top:4px}.info-meta b{color:var(--text)}
+#gtoggle{flex-shrink:0;height:26px;background:var(--bg2);border-top:1px solid var(--border2);border-bottom:1px solid var(--border2);display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;color:var(--text2);font-size:11px;letter-spacing:1.5px;user-select:none}
+#gtoggle:hover{background:var(--border);color:var(--text)}
+#guide{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0}
+#timebar{display:flex;flex-shrink:0;height:var(--tb-h);background:var(--bg2);border-bottom:1px solid var(--border2);overflow:hidden}
+#tb-spacer{flex-shrink:0;width:var(--ch-w);border-right:1px solid var(--border2)}
+#tb-scroll{flex:1;overflow:hidden}
+#tb-inner{display:flex;height:100%}
+.tlabel{flex-shrink:0;width:var(--slot-w);height:100%;display:flex;align-items:center;padding-left:10px;font-size:12px;font-weight:700;color:var(--text2);border-right:1px solid var(--border);white-space:nowrap}
+.tlabel.isnow{color:var(--amber)}
+#rows-wrap{flex:1;overflow:hidden}
+#rows-scroll{height:100%;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:var(--border2) transparent}
+#rows-scroll::-webkit-scrollbar{width:4px}
+#rows-scroll::-webkit-scrollbar-thumb{background:var(--border2)}
+.ch-row{display:flex;height:var(--row-h);border-bottom:1px solid var(--border);cursor:pointer}
+.ch-row:nth-child(odd){background:var(--row-a)}.ch-row:nth-child(even){background:var(--row-b)}
+.ch-row:hover{background:var(--row-hover)}.ch-row.is-active{background:var(--row-active)}
+.ch-label{flex-shrink:0;width:var(--ch-w);display:flex;flex-direction:column;justify-content:center;padding:4px 8px;border-right:1px solid var(--border2);gap:1px}
+.ch-num{font-size:20px;font-weight:700;color:var(--amber);line-height:1}
+.ch-name{font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:.4px;line-height:1.3;word-break:break-word}
+.ch-slots{flex:1;display:flex;position:relative;overflow:hidden}
+.slot{flex-shrink:0;height:100%;border-right:1px solid var(--border);display:flex;align-items:center;padding:0 7px;overflow:hidden;cursor:pointer;transition:background .1s}
+.slot:hover{background:rgba(255,176,0,.07)}.slot.is-now{background:rgba(255,176,0,.04)}
+.slot-t{font-size:11px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%;pointer-events:none}
+.slot.is-now .slot-t,.is-active .slot.is-now .slot-t{color:var(--amber);font-weight:600}
+.now-line{position:absolute;top:0;bottom:0;width:2px;background:var(--red);z-index:10;pointer-events:none;box-shadow:0 0 8px rgba(200,0,0,.6)}
+#statusbar{flex-shrink:0;height:32px;background:#060c22;border-top:1px solid var(--border2);display:flex;align-items:center;padding:0 14px;gap:14px}
+.sb-logo{font-weight:800;font-size:13px;color:var(--white)}
+.sb-dot{width:8px;height:8px;border-radius:50%;background:var(--amber);animation:sbp 1.5s ease-in-out infinite;flex-shrink:0}
+@keyframes sbp{0%,100%{opacity:1}50%{opacity:.3}}
+.sb-txt{font-size:11px;color:var(--text2)}
+.sb-sep{width:1px;height:14px;background:var(--border2)}
+.sb-right{margin-left:auto;display:flex;gap:10px}
+.sb-btn{font-size:11px;color:var(--text2);cursor:pointer;border:1px solid var(--border2);padding:2px 8px;border-radius:2px;transition:all .15s}
+.sb-btn:hover{border-color:var(--amber);color:var(--amber)}
+</style>
+</head>
+<body>
+<div id="splash">
+  <div class="sp-logo">Channel <span>Surfer</span></div>
+  <div class="sp-sub">Loading your channels...</div>
+  <div class="sp-bar-wrap"><div class="sp-bar" id="sp-bar"></div></div>
+  <div class="sp-prog" id="sp-prog">Fetching feeds... 0 / 207</div>
+  <button class="sp-btn" id="sp-btn" onclick="launchApp()">▶ WATCH TV</button>
+</div>
+<div id="app">
+  <div id="top">
+    <div id="player-wrap">
+      <div id="nosig"><div class="nosig-t">NO SIGNAL</div><div class="nosig-s">SELECT A CHANNEL BELOW</div></div>
+    </div>
+    <div id="info">
+      <div class="info-chname" id="info-chname">Channel Surfer</div>
+      <div class="info-title" id="info-title">Select a channel to start watching</div>
+      <div class="info-meta" id="info-meta"></div>
+    </div>
+  </div>
+  <div id="gtoggle" onclick="toggleGuide()"><span id="gi">↑</span>&nbsp;<span id="gt">HIDE GUIDE</span></div>
+  <div id="guide">
+    <div id="timebar"><div id="tb-spacer"></div><div id="tb-scroll"><div id="tb-inner"></div></div></div>
+    <div id="rows-wrap"><div id="rows-scroll"><div id="rows-inner"></div></div></div>
+  </div>
+  <div id="statusbar">
+    <div class="sb-logo">📺 CHANNEL SURFER</div>
+    <div class="sb-dot"></div>
+    <div class="sb-txt" id="sb-w">-- watching</div>
+    <div class="sb-sep"></div>
+    <div class="sb-txt">▲▼ Tune &nbsp;·&nbsp; Click to Expand &nbsp;·&nbsp; G: Guide</div>
+    <div class="sb-right"><div class="sb-btn" onclick="toggleGuide()">G: GUIDE</div></div>
+  </div>
+</div>
+<script>
+// ═══════════════════════════════════════════════
+// CATEGORY CHANNELS (Ch 2-40) — well-known videos
+// ═══════════════════════════════════════════════
+const CAT_CHANNELS = [
+  {num:2, name:"AI & ML", v:[
+    {id:"aircAruvnKk",t:"Neural Networks: Zero to Hero"},
+    {id:"ysEB8b2SBBM",t:"But what is a neural network?"},
+    {id:"zjkBMFhNj_g",t:"Intro to Large Language Models"},
+    {id:"gWsa6DlTiz0",t:"How AI Image Generators Work"},
+    {id:"R9OHn5ZF4Uo",t:"AlphaGo — The Movie"},
+    {id:"kopoLzvh5jY",t:"AI Safety — A Primer"},
+    {id:"5C_HPTJg5ek",t:"AI in 2024 — Year in Review"},
+    {id:"t1FfMYAEr6Q",t:"Attention Is All You Need"},
+    {id:"OFS90-FX6pg",t:"The moment AI becomes smarter than us"},
+    {id:"2ePf9rue1Ao",t:"3Blue1Brown: Neural Networks"}]},
+  {num:3, name:"AUTO & GARAGE", v:[
+    {id:"6cBeBhzEa8g",t:"Wrecked Lamborghini Rebuild"},
+    {id:"bX1T1bJaLkg",t:"Broken McLaren for $20k"},
+    {id:"7QpgY6FHPZY",t:"Engine Swap in 24 Hours"},
+    {id:"vS2nRe275fQ",t:"How to Rebuild a Car Engine"},
+    {id:"iHVKNGJ2hH4",t:"Turbo Install on V8"},
+    {id:"gVPCPv6RRQY",t:"World's Fastest Build"},
+    {id:"lR8Y1jxHBPk",t:"Drift Car Build"},
+    {id:"FQ4gXLpPBmQ",t:"LS Swap Everything"},
+    {id:"bP36WKXY4qE",t:"Cheapest Exotic Ever"},
+    {id:"1EzQLuEyAMQ",t:"Junkyard Engine Swap"}]},
+  {num:4, name:"BOOKS & IDEAS", v:[
+    {id:"lsWndfzuOc4",t:"How to Read More Books"},
+    {id:"K2sc_ck5BZU",t:"The Philosophy of Stoicism"},
+    {id:"XbL-65xEBnQ",t:"The Secret to Learning Anything"},
+    {id:"ZiYmHBVS-IM",t:"How to Take Smart Notes"},
+    {id:"oHAyis3n9oA",t:"The Science of Thinking"},
+    {id:"arj7oStGLkU",t:"How to Focus"},
+    {id:"MBRqu0YOH14",t:"Atomic Habits Summary"},
+    {id:"D9Ihs241zeg",t:"Flow State Explained"},
+    {id:"HhGuXCuDb1U",t:"Why Read Dostoevsky"},
+    {id:"o8NPllzkFhE",t:"Psychology of Misjudgment"}]},
+  {num:5, name:"CITY & INFRA", v:[
+    {id:"VNITBsHGZs8",t:"Why City Design is Broken"},
+    {id:"IFjD3NMv6Kw",t:"How Highways Destroyed Cities"},
+    {id:"A96nPwjQn4w",t:"The World Worst Railway"},
+    {id:"PKeFBMOTFuM",t:"Why Japan Trains Run on Time"},
+    {id:"ORzNZUeUHAM",t:"Engineering of Skyscrapers"},
+    {id:"tpxMEBl33H0",t:"Why Google Maps Fails"},
+    {id:"7bCTiLOq1Zc",t:"The Hidden World of Tunnels"},
+    {id:"YHBWpIJjpNA",t:"Why Roads Are So Expensive"},
+    {id:"vFI8SCRDKBE",t:"Urban Planning Explained"},
+    {id:"jV4gTAxFOSQ",t:"Underground Cities"}]},
+  {num:6, name:"CODE & DEV", v:[
+    {id:"zOjov-2OZ0E",t:"100 Days of Code"},
+    {id:"rfscVS0vtbw",t:"Learn Python in 4 Hours"},
+    {id:"HXV3zeQKqGY",t:"SQL Tutorial"},
+    {id:"PkZNo7MFNFg",t:"Learn JavaScript"},
+    {id:"8mAITcNt710",t:"React Tutorial"},
+    {id:"qw--VYLpxG4",t:"GraphQL in 100 Seconds"},
+    {id:"Ke90Tje7VS0",t:"React vs Vue vs Angular"},
+    {id:"I3jii9x98_E",t:"The Art of Debugging"},
+    {id:"pTnEG_WGd2Q",t:"Terminal for Beginners"},
+    {id:"Q33KBiDriJY",t:"Linux File System Explained"}]},
+  {num:7, name:"COMEDY", v:[
+    {id:"acLW1vFO-2Q",t:"Stand-Up Moments"},
+    {id:"6gk7OVRWxQs",t:"John Mulaney"},
+    {id:"mxXkGQVN_nM",t:"Conan in Japan"},
+    {id:"6mvB8jMEyaE",t:"Nate Bargatze Special"},
+    {id:"uRPlTHBeqIY",t:"Key and Peele"},
+    {id:"2_4Ii_nnMNM",t:"Trevor Noah"},
+    {id:"tMBNbwBIY0M",t:"Bo Burnham"},
+    {id:"5-sfGURTAt0",t:"Hasan Minhaj"},
+    {id:"A5LJ_mSmkgA",t:"Best SNL Sketches"},
+    {id:"P1vqFp60_ek",t:"Late Night Best"}]},
+  {num:8, name:"COOKING", v:[
+    {id:"OIYkMEA59d0",t:"Gordon Ramsay Steak"},
+    {id:"YeJvJkjmCbA",t:"Science of Great Pasta"},
+    {id:"xCJwINz3RaU",t:"Binging with Babish"},
+    {id:"SBjQ9tuuTJQ",t:"How to Make Real Ramen"},
+    {id:"JgMvMKSb8eY",t:"Sushi Master Class"},
+    {id:"EkJANTtKM7A",t:"Perfect Homemade Pizza"},
+    {id:"2pMBNPbCHnM",t:"French Cooking Techniques"},
+    {id:"pbuFrqQbO14",t:"Korean BBQ at Home"},
+    {id:"f-AeYHRSj2Q",t:"Is Wagyu Worth It?"},
+    {id:"CuLKBUCd_Hk",t:"Fermentation Deep Dive"}]},
+  {num:9, name:"DOCUMENTARY", v:[
+    {id:"Rs_xV0oiRkg",t:"Our Planet"},
+    {id:"v3x1tBm4k0A",t:"The Social Dilemma"},
+    {id:"aHsa7N7SPGA",t:"Seaspiracy"},
+    {id:"yiw6_JakZFc",t:"The Last Dance"},
+    {id:"k_GF8MXVDYQ",t:"Into the Void"},
+    {id:"Hm3JodBR-vs",t:"Citizenfour"},
+    {id:"VGBsddq_vd0",t:"Free Solo"},
+    {id:"Og5qHCBBcGs",t:"Drive to Survive"},
+    {id:"8t8tMIGQ7qg",t:"Making a Murderer"},
+    {id:"QhXSome0EAI",t:"Don't Look Up BTS"}]},
+  {num:10, name:"EDUCATION", v:[
+    {id:"OoJsPvmFixU",t:"How the Universe Works"},
+    {id:"BW3gKKiTvjs",t:"How Evolution Works"},
+    {id:"Ow0lr63y4Mw",t:"The Human Brain"},
+    {id:"OfV3VNgjX9A",t:"String Theory"},
+    {id:"IFPwm0e_K98",t:"How DNA Works"},
+    {id:"1G4isv_Fylg",t:"The Big Bang"},
+    {id:"TbBHedHgdMc",t:"Plate Tectonics"},
+    {id:"FpCrY7x5nEE",t:"How Black Holes Form"},
+    {id:"gRg6-_O66k0",t:"The Ocean Explained"},
+    {id:"kYB8IZa5AuE",t:"Quantum Computing"}]},
+  {num:11, name:"FINANCE", v:[
+    {id:"PHe0bXAIuk0",t:"How the Stock Market Works"},
+    {id:"Rm4aNLToUHs",t:"Index Funds Explained"},
+    {id:"2g-_TB-MJwQ",t:"The 2008 Financial Crisis"},
+    {id:"FTQbiNvZqaY",t:"Warren Buffett Strategy"},
+    {id:"IIRl1lj9hMo",t:"Crypto Explained"},
+    {id:"d9HjcQGRsQQ",t:"Real Estate vs Stocks"},
+    {id:"yY96hTb8WgI",t:"Passive Income"},
+    {id:"cNHkaOGbkwM",t:"Tax Strategies"},
+    {id:"F3QpgXBtAddQ",t:"Investing as a Beginner"},
+    {id:"LoIDP0Soxeo",t:"Psychology of Money"}]},
+  {num:12, name:"FITNESS", v:[
+    {id:"sFD4sWMO9p8",t:"Full Body No Equipment"},
+    {id:"FIk7gZVDfBE",t:"How to Build Muscle"},
+    {id:"j0gY5rUNnGw",t:"Morning Routine"},
+    {id:"IODxDxX7oi4",t:"David Goggins"},
+    {id:"_SDKZN6Mi38",t:"Why You're Not Losing Weight"},
+    {id:"vSSkDos2hzo",t:"Cold Exposure Benefits"},
+    {id:"GqpSaiFbh9I",t:"Zone 2 Cardio"},
+    {id:"9U42Bkj-FHE",t:"Perfect Pull-Up"},
+    {id:"Mn1P9YjFNkU",t:"Intermittent Fasting"},
+    {id:"Kxrn7A7rJgY",t:"Strength vs Hypertrophy"}]},
+  {num:13, name:"FOOD & TRAVEL", v:[
+    {id:"3ATxMHbGCGs",t:"Street Food Tokyo"},
+    {id:"mJNhXl4c2y0",t:"Eating in Vietnam"},
+    {id:"s6vjY8fGCoo",t:"Mexico City Food"},
+    {id:"pKE9AqcVi2I",t:"Best Eats in Bangkok"},
+    {id:"y30u3nyiPzo",t:"Italian Food Tour"},
+    {id:"8ycTN7jDe8Q",t:"Hidden Gems Seoul"},
+    {id:"O6vKBqnMkBM",t:"Eating Around Istanbul"},
+    {id:"qRJ4GHQgj8Y",t:"Street Food India"},
+    {id:"x1Ql0MiGpSQ",t:"Best Ramen in Japan"},
+    {id:"kKk2-Gbh5rg",t:"Farm to Table"}]},
+  {num:14, name:"GAMING", v:[
+    {id:"KzYf0lRIqDU",t:"History of Gaming"},
+    {id:"GqnMuJwMVuQ",t:"Elden Ring"},
+    {id:"dkJoC7gT4mw",t:"Speedrunning Explained"},
+    {id:"Qbq79BFHM7w",t:"Minecraft World Record"},
+    {id:"1rMq4_ld5kM",t:"Every Console Ranked"},
+    {id:"CgDu28hNGU4",t:"History of Loot Boxes"},
+    {id:"Wgzf8R7DLKU",t:"Retro Gaming Deep Dive"},
+    {id:"zG3SZYR2H9k",t:"Nintendo vs Sega"},
+    {id:"dNbMM7KHJUM",t:"Chess vs AI"},
+    {id:"e_S9VvJM1PI",t:"GTA VI"}]},
+  {num:15, name:"HISTORY", v:[
+    {id:"jb4T_PBfLMM",t:"Fall of Rome"},
+    {id:"Nzj9NJsVhFM",t:"WW2 in 7 Minutes"},
+    {id:"fJpCGnm1F7M",t:"The Cold War"},
+    {id:"h3P4AsF3fiA",t:"Ancient Egypt"},
+    {id:"c0dqMcPBTAQ",t:"Roman Empire"},
+    {id:"GVtHrRV2LsI",t:"Viking Age"},
+    {id:"Rgo0CJZWMHI",t:"Mongol Empire"},
+    {id:"ARvmki9bfYU",t:"American Civil War"},
+    {id:"CcxEQGZqWGM",t:"French Revolution"},
+    {id:"1cUcJCKEqtY",t:"How WW1 Started"}]},
+  {num:16, name:"LIFESTYLE", v:[
+    {id:"BbBMdGWHnow",t:"Minimalism"},
+    {id:"cHELGTDY87Q",t:"Digital Nomad Life"},
+    {id:"lXkMKGKFCaw",t:"Living Off Grid"},
+    {id:"k7TcfXtFPuI",t:"Van Life"},
+    {id:"oLWgsfCa4oc",t:"Morning Routine"},
+    {id:"LGnuISANhbs",t:"How to Journal"},
+    {id:"2rNDf8nQSx4",t:"Declutter Your Life"},
+    {id:"jx3yTxkj_LY",t:"Slow Living"},
+    {id:"vZPMRMi3JGk",t:"Build Better Habits"},
+    {id:"xfCKqfNVPM4",t:"Living Simply"}]},
+  {num:17, name:"NATURE", v:[
+    {id:"6v2L2UGZJAM",t:"Planet Earth II"},
+    {id:"4-079YIasck",t:"The Serengeti"},
+    {id:"Lm2TjNTOVow",t:"Deep Ocean"},
+    {id:"LmzxSmVivV0",t:"National Parks"},
+    {id:"iGIacR1-6No",t:"Wolves of Yellowstone"},
+    {id:"V6Wfo8JEYqQ",t:"The Amazon"},
+    {id:"7tRBkNv-t_I",t:"Africa Migration"},
+    {id:"vRTEMKlFPFo",t:"Coral Reefs"},
+    {id:"JsJxMSMkFwQ",t:"Predators of the Deep"},
+    {id:"cxBdHwVJXZg",t:"Antarctica"}]},
+  {num:18, name:"NEWS & POLITICS", v:[
+    {id:"GMnJAAlXEK8",t:"Democracy Under Threat"},
+    {id:"eD6xX50BMKA",t:"Middle East Future"},
+    {id:"Y8Fco4M0-Hk",t:"Climate Policy"},
+    {id:"Mah-4BWMTss",t:"US Economy"},
+    {id:"lRH5oBoNZjg",t:"Geopolitics"},
+    {id:"NNkSB3VCvSE",t:"Why Polarization Grows"},
+    {id:"2S7FCB6v5rM",t:"Media Bias"},
+    {id:"Vbv0YLzoMzE",t:"Immigration Debate"},
+    {id:"hNDgcjVGHFs",t:"Big Tech Regulation"},
+    {id:"k3NBHrBMcIM",t:"Future of NATO"}]},
+  {num:19, name:"PODCASTS", v:[
+    {id:"4GP3S7PQMMA",t:"Joe Rogan — Neil Tyson"},
+    {id:"BkEPLkMXoaA",t:"Huberman Lab — Sleep"},
+    {id:"DtT7-MV-gMY",t:"Huberman — Focus"},
+    {id:"6-1Ue0FFrHI",t:"Tim Ferriss — Naval"},
+    {id:"E4wKTaqFcHY",t:"Diary of a CEO"},
+    {id:"sY8aFSY2zv4",t:"Jordan Peterson"},
+    {id:"1Y3JYVH6kFg",t:"Hidden Brain"},
+    {id:"mTRtdWkGXFI",t:"Freakonomics"},
+    {id:"Cc-NzaKITSk",t:"Sam Harris — Free Will"},
+    {id:"6FQaRxcEpqY",t:"Lex Fridman"}]},
+  {num:20, name:"POP CULTURE", v:[
+    {id:"2kgZBMiUOEk",t:"Best Movies of the Decade"},
+    {id:"k7RhxXbXMcs",t:"Taylor Swift Era's Tour"},
+    {id:"bdFR0GMFLAU",t:"The Marvel Problem"},
+    {id:"ePZ5CnX3lAw",t:"Why Reality TV Rules"},
+    {id:"VXfC3Pep6jI",t:"Rise of K-Pop"},
+    {id:"S4SzvMfkNKs",t:"Best Films of 2024"},
+    {id:"Q0-WNygapLc",t:"Celebrity Culture"},
+    {id:"vxaFzY7LFZU",t:"Streaming Wars"},
+    {id:"x07GEWfELz4",t:"Internet Culture"},
+    {id:"J2iGVJCAhMs",t:"Oscars Ranked"}]},
+  {num:21, name:"POPULAR SCIENCE", v:[
+    {id:"BW3gKKiTvjs",t:"How Evolution Works"},
+    {id:"JXeJANDKwDc",t:"Time Explained"},
+    {id:"QAa2O_8wBUQ",t:"What Is Consciousness"},
+    {id:"pVbLlnmxIbY",t:"How Vaccines Work"},
+    {id:"4b4MUYve_U8",t:"CRISPR Explained"},
+    {id:"HEoUhlesETU",t:"The Fermi Paradox"},
+    {id:"rxMcJMGrMSk",t:"What Happens When You Die"},
+    {id:"dFCbJmgeHmA",t:"Science of Sleep"},
+    {id:"OfV3VNgjX9A",t:"String Theory"},
+    {id:"Ow0lr63y4Mw",t:"What If All Nukes Detonated"}]},
+  {num:22, name:"PRODUCTIVITY", v:[
+    {id:"wfKbSVTcMBs",t:"Deep Work"},
+    {id:"f-dBa1q5VXw",t:"Getting Things Done"},
+    {id:"VsCyvRg5xwQ",t:"Career Bet Every Engineer Must Make"},
+    {id:"q8NmkGxBTuY",t:"How to Get Job at Google"},
+    {id:"Bz2-49ha6DM",t:"Mastery — Robert Greene"},
+    {id:"5MgBikgcWnY",t:"How to Network"},
+    {id:"7SNgW7H7MhI",t:"Second Brain PKM"},
+    {id:"FmpIMt95ndU",t:"How CEOs Plan Their Day"},
+    {id:"Pj-S1Aw5rLo",t:"Negotiating Salary"},
+    {id:"1sSjqJidrKw",t:"Remote Work Productivity"}]},
+  {num:23, name:"RETRO TV", v:[
+    {id:"lpsGBGfC0WY",t:"Johnny Carson"},
+    {id:"F5pgG3oB77s",t:"The Twilight Zone"},
+    {id:"HoSCMRdwDTo",t:"1960s Commercials"},
+    {id:"W0DMGMbAHCw",t:"The Ed Sullivan Show"},
+    {id:"gMT2fRfn2Fg",t:"Classic Drive-Ins"},
+    {id:"J2NLdS6kBLY",t:"Howdy Doody"},
+    {id:"A_qN4BX7kv4",t:"Andy Griffith Show"},
+    {id:"pE53BDBrUZc",t:"I Love Lucy"},
+    {id:"xLWFVaWT3Vw",t:"1970s America"},
+    {id:"eFgornd2i8E",t:"Clutch Cargo"}]},
+  {num:24, name:"MUSIC", v:[
+    {id:"9bZkp7q19f0",t:"PSY — Gangnam Style"},
+    {id:"JGwWNGJdvx8",t:"Ed Sheeran — Shape of You"},
+    {id:"h_D3VFfhvs4",t:"Luis Fonsi — Despacito"},
+    {id:"fRh_vgS2dFE",t:"Justin Bieber — Sorry"},
+    {id:"kffacxfA7G4",t:"Bruno Mars — Uptown Funk"},
+    {id:"hT_nvWreIhg",t:"OneRepublic — Counting Stars"},
+    {id:"nfWlot6h_JM",t:"Wiz Khalifa — See You Again"},
+    {id:"09R8_2nJtjg",t:"Miley Cyrus — Wrecking Ball"},
+    {id:"RgKAFK5djSk",t:"Mark Ronson — Uptown Funk"},
+    {id:"OPf0YbXqDm0",t:"Maroon 5 — Sugar"}]},
+  {num:25, name:"MUSIC 2020S", v:[
+    {id:"H5v3kku4y6Q",t:"Olivia Rodrigo — drivers license"},
+    {id:"cNd3WBYW7mg",t:"The Weeknd — Blinding Lights"},
+    {id:"Vy5bChUJVDc",t:"Harry Styles — As It Was"},
+    {id:"6JnGBs88sL0",t:"Dua Lipa — Levitating"},
+    {id:"uelHwf8o7_U",t:"Billie Eilish — Happier Than Ever"},
+    {id:"MXndBmhAo6Q",t:"Bad Bunny — Me Porto Bonito"},
+    {id:"g9kSByCnWhA",t:"Taylor Swift — Anti-Hero"},
+    {id:"CevxZvSJLk8",t:"Justin Bieber — Peaches"},
+    {id:"SXiSVQZh9pQ",t:"Lizzo — About Damn Time"},
+    {id:"dDCkrMDDSKs",t:"Glass Animals — Heat Waves"}]},
+  {num:26, name:"MUSIC 2010s", v:[
+    {id:"YqeW9_5kURI",t:"Adele — Rolling in the Deep"},
+    {id:"pRpeEdMmmQ0",t:"Pharrell — Happy"},
+    {id:"OPf0YbXqDm0",t:"Maroon 5 — Sugar"},
+    {id:"FJfFZqTlWrQ",t:"Drake — God's Plan"},
+    {id:"4lE4DT3C-0A",t:"Adele — Hello"},
+    {id:"450p7goxZqg",t:"Eminem — Not Afraid"},
+    {id:"7PCkvCPvDXk",t:"Kendrick Lamar"},
+    {id:"KRaWnd3LJms",t:"Uptown Funk Official"},
+    {id:"3JZ4pnNtyxQ",t:"Lorde — Royals"},
+    {id:"nfWlot6h_JM",t:"See You Again"}]},
+  {num:27, name:"MUSIC 2000s", v:[
+    {id:"kVmC0ktBMsU",t:"Linkin Park — In the End"},
+    {id:"3MteSlpxCpo",t:"Eminem — Lose Yourself"},
+    {id:"lDK9QqIzhwk",t:"OutKast — Hey Ya"},
+    {id:"hLQl3WQQoP0",t:"Norah Jones — Come Away With Me"},
+    {id:"kffacxfA7G4",t:"2000s Rock Mix"},
+    {id:"8UVNT4wvIGY",t:"Amy Winehouse — Rehab"},
+    {id:"5anLPw0Efmo",t:"The White Stripes"},
+    {id:"Zi_XLOBDo_Y",t:"Beyonce — Crazy in Love"},
+    {id:"cdqMvuVBiHw",t:"Coldplay — The Scientist"},
+    {id:"wCkFtqrigtA",t:"Jack Johnson — Banana Pancakes"}]},
+  {num:28, name:"MUSIC 90s", v:[
+    {id:"1w7OgIMMRc4",t:"Nirvana — Smells Like Teen Spirit"},
+    {id:"oHg5SJYRHA0",t:"Rickroll Classic"},
+    {id:"btPJPFnesV4",t:"Alanis Morissette"},
+    {id:"yKNxeF4KMsY",t:"Green Day — Basket Case"},
+    {id:"6Ejga4kJUts",t:"TLC — Waterfalls"},
+    {id:"8WEtxJ4-sh4",t:"Blink 182 — All the Small Things"},
+    {id:"psuRGfAaju4",t:"Dr. Dre — Still D.R.E."},
+    {id:"Dm-kSDwg4i4",t:"Tupac — California Love"},
+    {id:"lzn1vVQiWcs",t:"Backstreet Boys — I Want It That Way"},
+    {id:"TR3Vdo5etCQ",t:"U2 — One"}]},
+  {num:29, name:"MUSIC 80s", v:[
+    {id:"kBoVFIoJCgI",t:"Take On Me"},
+    {id:"vFhwxcMRUuE",t:"Michael Jackson — Billie Jean"},
+    {id:"xFrGuyw1V8s",t:"Toto — Africa"},
+    {id:"rY0WxgSXdEE",t:"Guns N Roses — Sweet Child"},
+    {id:"hgALhEu_BKI",t:"Don't You Forget About Me"},
+    {id:"YkADj0TPrJA",t:"Journey — Don't Stop Believin"},
+    {id:"dsxtImDVMig",t:"Queen — Don't Stop Me Now"},
+    {id:"qeMFqkcPYcg",t:"Bon Jovi — Livin on a Prayer"},
+    {id:"ejorQVy3m8E",t:"The Police — Every Breath"},
+    {id:"fJ9rUzIMcZQ",t:"Bohemian Rhapsody"}]},
+  {num:30, name:"NATURE 4K", v:[
+    {id:"6v2L2UGZJAM",t:"Planet Earth II Cities"},
+    {id:"Rs_xV0oiRkg",t:"Our Planet Earth"},
+    {id:"4-079YIasck",t:"Serengeti 4K"},
+    {id:"Lm2TjNTOVow",t:"Deep Ocean 4K"},
+    {id:"iGIacR1-6No",t:"Wolves of Yellowstone"},
+    {id:"V6Wfo8JEYqQ",t:"Amazon 4K"},
+    {id:"7tRBkNv-t_I",t:"Great Migration 4K"},
+    {id:"vRTEMKlFPFo",t:"Coral Reefs 4K"},
+    {id:"JsJxMSMkFwQ",t:"Deep Sea Predators"},
+    {id:"cxBdHwVJXZg",t:"Frozen Planet 4K"}]},
+  {num:31, name:"RETRO TECH", v:[
+    {id:"BtgOFOmMXHQ",t:"History of the Computer"},
+    {id:"NXpA86HzHIs",t:"Vintage Apple Macs"},
+    {id:"1ZZ_7SSVTJM",t:"Old IBM Mainframes"},
+    {id:"R7yfISlGLNU",t:"Vintage Cameras"},
+    {id:"Piq6qrMOB4g",t:"Old HiFi Gear"},
+    {id:"BtgOFOmMXHQ",t:"Classic Synthesizers"},
+    {id:"4b4MUYve_U8",t:"Early Internet Days"},
+    {id:"HEoUhlesETU",t:"Vintage Gadgets"},
+    {id:"rxMcJMGrMSk",t:"Old Video Games"},
+    {id:"dFCbJmgeHmA",t:"Retro Tech Repair"}]},
+  {num:32, name:"SPACE", v:[
+    {id:"FpCrY7x5nEE",t:"How Black Holes Form"},
+    {id:"OoJsPvmFixU",t:"How the Universe Works"},
+    {id:"1G4isv_Fylg",t:"The Big Bang"},
+    {id:"OfV3VNgjX9A",t:"String Theory"},
+    {id:"JXeJANDKwDc",t:"Time Explained"},
+    {id:"TbBHedHgdMc",t:"Plate Tectonics"},
+    {id:"gRg6-_O66k0",t:"The Ocean Explained"},
+    {id:"BW3gKKiTvjs",t:"Evolution of Life"},
+    {id:"HEoUhlesETU",t:"Fermi Paradox"},
+    {id:"QAa2O_8wBUQ",t:"Are We Alone?"}]},
+  {num:33, name:"SPORTS", v:[
+    {id:"oRkNFO0JKp8",t:"Greatest Sports Moments"},
+    {id:"UCX6OQ3DkcsbYNE6H8uQQuVA",t:"Sports Highlights"},
+    {id:"9bZkp7q19f0",t:"World Cup Moments"},
+    {id:"Og5qHCBBcGs",t:"Formula 1 Racing"},
+    {id:"yiw6_JakZFc",t:"The Last Dance"},
+    {id:"VGBsddq_vd0",t:"Extreme Sports"},
+    {id:"ARvmki9bfYU",t:"Golf Highlights"},
+    {id:"GVtHrRV2LsI",t:"Combat Sports Best"},
+    {id:"7tRBkNv-t_I",t:"Olympics Moments"},
+    {id:"k_GF8MXVDYQ",t:"Climbing Extremes"}]},
+  {num:34, name:"TECH & GADGETS", v:[
+    {id:"zjkBMFhNj_g",t:"Intro to LLMs"},
+    {id:"aircAruvnKk",t:"Neural Networks"},
+    {id:"gWsa6DlTiz0",t:"AI Image Generators"},
+    {id:"zOjov-2OZ0E",t:"100 Days of Code"},
+    {id:"BtgOFOmMXHQ",t:"Tech Reviews 2024"},
+    {id:"NXpA86HzHIs",t:"New Gadgets Reviewed"},
+    {id:"1ZZ_7SSVTJM",t:"Best Tech of the Year"},
+    {id:"R7yfISlGLNU",t:"Smartphones Compared"},
+    {id:"Piq6qrMOB4g",t:"Laptops Reviewed"},
+    {id:"4b4MUYve_U8",t:"Future Tech"}]},
+  {num:35, name:"TRAVEL", v:[
+    {id:"3ATxMHbGCGs",t:"Tokyo Travel Guide"},
+    {id:"mJNhXl4c2y0",t:"Vietnam Travel"},
+    {id:"s6vjY8fGCoo",t:"Mexico City"},
+    {id:"pKE9AqcVi2I",t:"Bangkok Guide"},
+    {id:"y30u3nyiPzo",t:"Italy Travel"},
+    {id:"8ycTN7jDe8Q",t:"Seoul Guide"},
+    {id:"O6vKBqnMkBM",t:"Istanbul"},
+    {id:"qRJ4GHQgj8Y",t:"India Backpacking"},
+    {id:"x1Ql0MiGpSQ",t:"Japan Rail Trip"},
+    {id:"kKk2-Gbh5rg",t:"European Road Trip"}]},
+  {num:36, name:"WORLD NEWS", v:[
+    {id:"GMnJAAlXEK8",t:"Democracy Report"},
+    {id:"eD6xX50BMKA",t:"Middle East"},
+    {id:"Y8Fco4M0-Hk",t:"Climate Crisis"},
+    {id:"Mah-4BWMTss",t:"Global Economy"},
+    {id:"lRH5oBoNZjg",t:"Geopolitical Analysis"},
+    {id:"NNkSB3VCvSE",t:"Political Polarization"},
+    {id:"2S7FCB6v5rM",t:"Media Landscape"},
+    {id:"Vbv0YLzoMzE",t:"Migration Crisis"},
+    {id:"hNDgcjVGHFs",t:"Tech Regulation"},
+    {id:"k3NBHrBMcIM",t:"NATO and Security"}]}
+];
+
+// ═══════════════════════════════════════════════
+// YOUR SUBSCRIPTION CHANNELS (fetched via RSS)
+// ═══════════════════════════════════════════════
+const SUB_CHANNELS = [
+  {num:100, name:'DriveHub', ucid:'UC-58E4bRH1VTAG9PMLZwnyg', v:[]},
+  {num:101, name:'Nico Leonard Uncut', ucid:'UC-IVpEe1GQYclVEGLgPd82Q', v:[]},
+  {num:102, name:'Huracan ian', ucid:'UC-P-HwDKpTg7o0A2XTjCvyg', v:[]},
+  {num:103, name:'knoxieman', ucid:'UC1865SUFCq4IXvmdN5q6iog', v:[]},
+  {num:104, name:'Finnegan\'s Garage', ucid:'UC1IdPylqngGiuHFLJqHbG_g', v:[]},
+  {num:105, name:'Sayaka\'s Digital Attic', ucid:'UC2OYnh5nKWUnzj5D1Xt9Kdw', v:[]},
+  {num:106, name:'Car Wizard', ucid:'UC2TTf3i4wwsRW8ex1zRXH8A', v:[]},
+  {num:107, name:'Project Farm', ucid:'UC2rzsm1Qi6N1X-wuOg_p0Ng', v:[]},
+  {num:108, name:'Kenrick Sound -- ケンリックサウンド', ucid:'UC3A0nuJpz3NnPi2luPj41fA', v:[]},
+  {num:109, name:'Simone Giertz', ucid:'UC3KEoMzNz8eYnwBC34RaKCQ', v:[]},
+  {num:110, name:'Ziptie Diaries', ucid:'UC3O2YlOw9cIYKub69yJpVCQ', v:[]},
+  {num:111, name:'Tropicana Entertainment', ucid:'UC3Zlfyb7WDFrzdTFZ3GreIw', v:[]},
+  {num:112, name:'LittleGripGarage', ucid:'UC3m7qcuaYU-KpJTbAoJJb-g', v:[]},
+  {num:113, name:'Blonde Mary', ucid:'UC42XNo5ywtmSZjohSDlucWA', v:[]},
+  {num:114, name:'Rustomod', ucid:'UC4DXtBta3uL5CFLx306bdJA', v:[]},
+  {num:115, name:'Sparks Motors', ucid:'UC4HjlK913jACgJogyrISS6w', v:[]},
+  {num:116, name:'Salvage to Savage', ucid:'UC4KIrJxM_1fNZQpwYMHBqHQ', v:[]},
+  {num:117, name:'細井研志', ucid:'UC5b1QVECAqmbXKgPJHgFNgw', v:[]},
+  {num:118, name:'The Vintage Golfer', ucid:'UC5cPxPsWnWBguCZmZAZFVVw', v:[]},
+  {num:119, name:'DIY-time', ucid:'UC6KeDGPZDRGgGf3EXolvxUg', v:[]},
+  {num:120, name:'Arkfeller', ucid:'UC6lG7AKS20PWilo9nFhqylA', v:[]},
+  {num:121, name:'Outside the Barn', ucid:'UC7L9_CR67b_Av7xd43SGRJA', v:[]},
+  {num:122, name:'Haters Garage', ucid:'UC7Qz_rI47mgtB3Y4vjinxkQ', v:[]},
+  {num:123, name:'Rainman Ray\'s Repairs', ucid:'UC7qMMY6UJHpNakTDMz6vVXQ', v:[]},
+  {num:124, name:'Watch Repair Channel', ucid:'UC7vSOnpUocYq0z8oiYFk0zQ', v:[]},
+  {num:125, name:'Softsparkling', ucid:'UC7yKRMmbpnSBo23LN_DYrEw', v:[]},
+  {num:126, name:'MR. NVC Restoration', ucid:'UC8MtQAo0KomzQymwgHD967w', v:[]},
+  {num:127, name:'Bigturbobuilds', ucid:'UC8lS6DLm2kbFwWJg5BMx8XQ', v:[]},
+  {num:128, name:'BUM', ucid:'UC99HbHppTZpT8okpjHVUFzg', v:[]},
+  {num:129, name:'Gas Monkey Garage', ucid:'UC9Fj-4oQzaEPkg-XHjqZE0g', v:[]},
+  {num:130, name:'RAW-CAt', ucid:'UC9GVESO-Focmgn2fQbF5vhQ', v:[]},
+  {num:131, name:'Paige Spiranac', ucid:'UC9iCL5yoIZmeJkdwb5htV5Q', v:[]},
+  {num:132, name:'Stay Tuned', ucid:'UC9yHbzcmcVTeYvczQAOyjfQ', v:[]},
+  {num:133, name:'Lenora\'s Midnight Rental', ucid:'UCAAkevxgFhmzIt5udUZMPPw', v:[]},
+  {num:134, name:'Stovall\'s Garage', ucid:'UCABdp4ekoNohqnmbPpkC40w', v:[]},
+  {num:135, name:'Pole Barn Garage', ucid:'UCAGExNmJq8PGxhGSAHqursA', v:[]},
+  {num:136, name:'Primitive Technology', ucid:'UCAL3JXZSzSm8AlZyD3nQdBA', v:[]},
+  {num:137, name:'The Detail Geek', ucid:'UCAQHQEO4QpI5dXtr3vLoFCg', v:[]},
+  {num:138, name:'Deas Nutz', ucid:'UCAdyKPwUwLwffWsR5k5IJTA', v:[]},
+  {num:139, name:'meade916', ucid:'UCAn7KfxuoxUur8dP-lFCjdA', v:[]},
+  {num:140, name:'YallBot', ucid:'UCBBsPuUY-8UwkSim4zLXp1w', v:[]},
+  {num:141, name:'Silicon Siren', ucid:'UCC9uI0zEXkiRFgctyTLegRg', v:[]},
+  {num:142, name:'Merlins Old School Garage', ucid:'UCCEKcrNldtHYshuMipWjqmw', v:[]},
+  {num:143, name:'Magnus Walker', ucid:'UCCwUjQPx3rHo41xEpim2n5A', v:[]},
+  {num:144, name:'Bryson DeChambeau', ucid:'UCCxF55adGXOscJ3L8qdKnrQ', v:[]},
+  {num:145, name:'MorFab Industries', ucid:'UCD03zaC0fnzCp5oHEJG0yYQ', v:[]},
+  {num:146, name:'Wristwatch Revival', ucid:'UCD80T1s2Za4K682CQDGwEKQ', v:[]},
+  {num:147, name:'Caddie issues golf', ucid:'UCDJx8Tx5r3_ihwm2KkFLDlQ', v:[]},
+  {num:148, name:'Adrian\'s Digital Basement', ucid:'UCE5dIscvDxrb7CD5uiJJOiw', v:[]},
+  {num:149, name:'Raptor\'s Garage', ucid:'UCEG7lLmw8NbICVnPuJRmbyQ', v:[]},
+  {num:150, name:'Aurikatariina', ucid:'UCEHFYTkv0IIn6RYJBNcgr-Q', v:[]},
+  {num:151, name:'GET HANDS DIRTY', ucid:'UCETeXD_3awsQv-9rSdCYXQQ', v:[]},
+  {num:152, name:'Bikes and Beards', ucid:'UCEbCRO739v3_RDmv6_aw1QQ', v:[]},
+  {num:153, name:'Gramp\'s House-#', ucid:'UCEq-qb36pvVki52qOgTtWtw', v:[]},
+  {num:154, name:'EXOcontralto', ucid:'UCF5E6g_RiqdtYO4ZiiK6F6w', v:[]},
+  {num:155, name:'Triple R', ucid:'UCFAmxzLAzEZpnSgsrizyd6Q', v:[]},
+  {num:156, name:'Williston Audio Labs', ucid:'UCGW-qPM8-xJE4-uSLA5BAGQ', v:[]},
+  {num:157, name:'Ok Speed and Custom', ucid:'UCGasHlOgL2m8vLO29NTl9oA', v:[]},
+  {num:158, name:'Dino DC', ucid:'UCGicqFQh51rHxPVis6FvHMQ', v:[]},
+  {num:159, name:'Sarah -n- Tuned', ucid:'UCHSbIfwVuec_BwUrYAqN_qw', v:[]},
+  {num:160, name:'Parker The Basshead', ucid:'UCHaImhRCv3wdEUh8t8hG70Q', v:[]},
+  {num:161, name:'Kari', ucid:'UCHb7nqRBKoJzcWGvZ3fqlyw', v:[]},
+  {num:162, name:'Nassrin\'s DIY', ucid:'UCHujunUwp3IPDfrA-LrxSFg', v:[]},
+  {num:163, name:'TysyTube Restoration', ucid:'UCIGEtjevANE0Nqain3EqNSg', v:[]},
+  {num:164, name:'Kaloopy', ucid:'UCJF7-ssT62pZ5f0I-VBhksg', v:[]},
+  {num:165, name:'Ryan Hall, Y\'all', ucid:'UCJHAT3Uvv-g3I8H3GhHWV7w', v:[]},
+  {num:166, name:'Vice Grip Lodge', ucid:'UCJVsZlOKBCUN8MMJeDmnA4g', v:[]},
+  {num:167, name:'Mr. Sam', ucid:'UCKknO6RMZq-Bi1Um5Mkr3cw', v:[]},
+  {num:168, name:'B Bart', ucid:'UCKlV8EKfXyfM6nMiEp3ctAg', v:[]},
+  {num:169, name:'Donut', ucid:'UCL6JmiMXKoXS6bpP1D3bk8g', v:[]},
+  {num:170, name:'Corner Balanced', ucid:'UCLEerioju6-NAYOgGKREpVA', v:[]},
+  {num:171, name:'Prusa 3D', ucid:'UCLHAxAdvAKJY0niRJZRYMvg', v:[]},
+  {num:172, name:'Gately Audio', ucid:'UCLMtp620BZpBy_DRj5IZq-Q', v:[]},
+  {num:173, name:'Hands On Katie', ucid:'UCLqQ5m7AXj_oyUvLZPsts0Q', v:[]},
+  {num:174, name:'Hydraulic Power Press', ucid:'UCM8Sd02RQcF9OmcNCRMye4w', v:[]},
+  {num:175, name:'John Ludwick', ucid:'UCMS0JTKMUmaZctgxbtjKpgQ', v:[]},
+  {num:176, name:'Wheels Through Time', ucid:'UCMkl9z3-VTPE7lOXOjKcoUg', v:[]},
+  {num:177, name:'my mechanics', ucid:'UCMrMVIBtqFW6O0-MWq26gqw', v:[]},
+  {num:178, name:'Senri Kawaguchi', ucid:'UCNKONcy9suN-n9zu1Kitoyg', v:[]},
+  {num:179, name:'Dave\'s Garage', ucid:'UCNzszbnvQeFzObW0ghk0Ckw', v:[]},
+  {num:180, name:'Grace Charis', ucid:'UCOSXcdrub_b46eH22X_QW-A', v:[]},
+  {num:181, name:'Kirby Meets Audio', ucid:'UCOuow_HIYmeaIqi42zVs3qg', v:[]},
+  {num:182, name:'Brian The Bootmaker', ucid:'UCPjoWhob1Mhi0MtOHCzMKZA', v:[]},
+  {num:183, name:'Chase After The Right Price', ucid:'UCPke0SGE7FGIuhnGurf9qQA', v:[]},
+  {num:184, name:'Hugh Jeffreys', ucid:'UCQDhxkSxZA6lxdeXE19aoRA', v:[]},
+  {num:185, name:'Lite Brite', ucid:'UCQHpNTD6GxtNe8HanFW8dnw', v:[]},
+  {num:186, name:'Jay Leno\'s Garage', ucid:'UCQMELFlXQL38KPm8kM-4Adg', v:[]},
+  {num:187, name:'89 Built', ucid:'UCQuhhpK9j_zZfau0qldrRjg', v:[]},
+  {num:188, name:'Stockpile Hobbies', ucid:'UCQvNA3vFlE4tBEo43rxqjyg', v:[]},
+  {num:189, name:'Tuned Signal', ucid:'UCR1AbztIcuQcQK68BMkgwXw', v:[]},
+  {num:190, name:'Calum', ucid:'UCR_i-r3a0vnlUJxEN4_5l3g', v:[]},
+  {num:191, name:'Wife Unit', ucid:'UCRpChhbO3XZT2ZL0oHfaPyQ', v:[]},
+  {num:192, name:'U.S. Amps Inc.', ucid:'UCS6DJdvdTG_iVTv7k56m-Zw', v:[]},
+  {num:193, name:'Junkyard Digs', ucid:'UCS87-wYrvmexsLkBj0jhrnQ', v:[]},
+  {num:194, name:'YL Raisa', ucid:'UCSCoIWxktFgujg4h9GuigBw', v:[]},
+  {num:195, name:'carstereochick', ucid:'UCSDWB9mso0yB9nwEUhoOUdA', v:[]},
+  {num:196, name:'Flying Sparks Garage', ucid:'UCSYfpT-hQRBeujVwHEMEsww', v:[]},
+  {num:197, name:'Raeted', ucid:'UCSmSTxpVTXyeAAbnpTFWJsw', v:[]},
+  {num:198, name:'Nock Ranch', ucid:'UCSoNEd-XuQhzNIGNO8p3Nqg', v:[]},
+  {num:199, name:'WOOD GIRL', ucid:'UCSvBlJ_gs4hrvgmEG6-_lNQ', v:[]},
+  {num:200, name:'Unofficial Audio', ucid:'UCT5F5ZyCrhWvZfVDkTunSbg', v:[]},
+  {num:201, name:'Edd China', ucid:'UCTnK3UFznEB5bd4vDEFMM4A', v:[]},
+  {num:202, name:'CarsandCameras', ucid:'UCU3gQGhk0lYK-fKOR0sopgg', v:[]},
+  {num:203, name:'Mr Carlson\'s Lab', ucid:'UCU9SoQxJewrWb_3GxeteQPA', v:[]},
+  {num:204, name:'Just Zophie', ucid:'UCUIfELj7xveRjjToka4P2yg', v:[]},
+  {num:205, name:'John Malecki', ucid:'UCVUSDq6-oSpWAAPUppHFtZQ', v:[]},
+  {num:206, name:'AlmazanKitchen', ucid:'UCVVAnxQ2YMC_qlc7QfPA2YQ', v:[]},
+  {num:207, name:'mrnigelng', ucid:'UCVjlpEjEY9GpksqbEesJnNA', v:[]},
+  {num:208, name:'Fazio Electric', ucid:'UCWODkkyItzvmQF-JTycUFow', v:[]},
+  {num:209, name:'MrBeast', ucid:'UCX6OQ3DkcsbYNE6H8uQQuVA', v:[]},
+  {num:210, name:'Nico Leonard', ucid:'UCXPXfAAo-yV6Y-0PZecwBLw', v:[]},
+  {num:211, name:'Cathode Ray Dude - CRD', ucid:'UCXnNibvR_YIdyPs8PZIBoEw', v:[]},
+  {num:212, name:'AMMO NYC', ucid:'UCYsa8SOy3TkoxI5D17s1u-w', v:[]},
+  {num:213, name:'The Curb Cut', ucid:'UCZHwa50DjJMc8fUMjl-ux4w', v:[]},
+  {num:214, name:'NotaRubicon Productions', ucid:'UCZeBmj9_UNMoqDHSO7QtzXg', v:[]},
+  {num:215, name:'HiFisquarepants', ucid:'UCZii5W_xOJ0JeIGhjsoWUmg', v:[]},
+  {num:216, name:'cosmic', ucid:'UC_Bj1LhXUM1mrOw2EbQwIBw', v:[]},
+  {num:217, name:'Revel Machines', ucid:'UC_N-OeCKgadL2YGsn2aiPGg', v:[]},
+  {num:218, name:'Jayson Dagner', ucid:'UC_PaWWCyBFJ9w8F2dnAO59w', v:[]},
+  {num:219, name:'Speeed', ucid:'UC_mmaVYaFmlfdxuKb6U69Yw', v:[]},
+  {num:220, name:'Soundman Car Audio', ucid:'UC_ojrdK0jMGKFduQuDcyanw', v:[]},
+  {num:221, name:'Victor\'s Shop', ucid:'UCa2MyLskVJDDNJIRZQW-NNA', v:[]},
+  {num:222, name:'RESTORED', ucid:'UCa422iqMhGLDX6GVC1gxxlA', v:[]},
+  {num:223, name:'Rusty Machine Co.', ucid:'UCa6uRSpNwGZ5cRHau44cF5g', v:[]},
+  {num:224, name:'Hand Tool Rescue', ucid:'UCasG9kJWi1eVxM0QkyqKVJQ', v:[]},
+  {num:225, name:'SAM THE COOKING GUY', ucid:'UCbRj3Tcy1Zoz3rcf83nW5kw', v:[]},
+  {num:226, name:'Chris Boden', ucid:'UCbaAyXYMnbQu0BGGPbvxHsw', v:[]},
+  {num:227, name:'Adrian\'s Digital Basement ][', ucid:'UCbtwi4wK1YXd9AyV_4UcE6g', v:[]},
+  {num:228, name:'The Vinyl Fan', ucid:'UCc0SMRdMpraXQKXUt2R_1Sg', v:[]},
+  {num:229, name:'Hydraulic Press Channel', ucid:'UCcMDMoNu66_1Hwi5-MeiQgw', v:[]},
+  {num:230, name:'Mustie1', ucid:'UCcSeeATlWJJbXpOZRYOfaDg', v:[]},
+  {num:231, name:'TAMIYA Legends', ucid:'UCcux5p3IS3QC-LxUufBA-iw', v:[]},
+  {num:232, name:'WhistlinDiesel', ucid:'UCdqp0KK_Io7TwK5cJMBvB0Q', v:[]},
+  {num:233, name:'Epic UpCycling', ucid:'UCeRsgP7atpJKWL-RHrnaWjA', v:[]},
+  {num:234, name:'MORR Unsupervised', ucid:'UCebknlQSxmLLGkXPwS3GjMQ', v:[]},
+  {num:235, name:'Puddin\'s Fab Shop', ucid:'UCf6kbcafhNg5B-HaybBOkYg', v:[]},
+  {num:236, name:'Isaac it\'ll be fine', ucid:'UCfBQFV6p1sYqm-7vvAAjV3A', v:[]},
+  {num:237, name:'Guga Foods', ucid:'UCfE5Cz44GlZVyoaYTHJbuZw', v:[]},
+  {num:238, name:'donjoyride', ucid:'UCfOCZoQE2mnOUxeOxOKa2Qg', v:[]},
+  {num:239, name:'WD Detailing', ucid:'UCfP224f7wOyuEtoTh80cNkQ', v:[]},
+  {num:240, name:'humanjukebox45s', ucid:'UCfjM7sUgU0Dz65fjUagwQ1g', v:[]},
+  {num:241, name:'Puddin\'s Fab Shop 2 (All The Extras!)', ucid:'UCfnOLUWgowmHk15Nzvf-Nlw', v:[]},
+  {num:242, name:'Theetravisb', ucid:'UCfwfQyeW582rfrQwjAw7LEQ', v:[]},
+  {num:243, name:'Solo Tetty', ucid:'UCfygphZSdssd-m4vJzN_qag', v:[]},
+  {num:244, name:'Ronald Finger', ucid:'UCgvRHIimO6otkQ4Dcl_9YqQ', v:[]},
+  {num:245, name:'Old School Stereo', ucid:'UCgz8QirXKO5EPWH6sV-hKlw', v:[]},
+  {num:246, name:'Cleetus McFarland', ucid:'UCh8f8vssLddD2PbnU3Ag_Bw', v:[]},
+  {num:247, name:'Joshua Weissman', ucid:'UChBEbMKI1eCcejTtmI32UEw', v:[]},
+  {num:248, name:'What Meike Makes', ucid:'UChC5Ga5avbX5qOCIvnBvBzA', v:[]},
+  {num:249, name:'Westen Champlin', ucid:'UChRlaISXbl2gECFAmDzxgzg', v:[]},
+  {num:250, name:'John\'s Furniture Repair', ucid:'UChSFytO6zQHxcawEaCKxryg', v:[]},
+  {num:251, name:'My Mate VINCE', ucid:'UChY9Cgv-iyPDvf1Bkyx20OQ', v:[]},
+  {num:252, name:'Naomi Wu', ucid:'UCh_ugKacslKhsGGdXP0cRRA', v:[]},
+  {num:253, name:'Boogie Chassis', ucid:'UChr6UIz6W8kPHHa_mFZhQxw', v:[]},
+  {num:254, name:'Caseys Customs', ucid:'UCi8cxCdWka7V8sWTnScePpw', v:[]},
+  {num:255, name:'Adam Savage’s Tested', ucid:'UCiDJtJKMICpb9B1qf7qjEOA', v:[]},
+  {num:256, name:'Lost Cause Ranch', ucid:'UCiamZKLYMfGBNkoSbG3-Gpg', v:[]},
+  {num:257, name:'Grind Hard Plumbing Co', ucid:'UCivi_f1nniBzEOfKhRoN12Q', v:[]},
+  {num:258, name:'Chili Klaus', ucid:'UCj1lgD9Xs3HBN-KxRnuZ4YQ', v:[]},
+  {num:259, name:'Good People Motors', ucid:'UCjeibjFVBgExFcrl5gWP0aw', v:[]},
+  {num:260, name:'Mini Truck Mommy', ucid:'UCjgo3KJY7BXCvTlv3n5ffSg', v:[]},
+  {num:261, name:'Trioxin Kustoms', ucid:'UCkTNGMXexyzdpDPHI4CBvPg', v:[]},
+  {num:262, name:'PFI Speed', ucid:'UCkdv20JhDrAnhl8ebPLIfzA', v:[]},
+  {num:263, name:'Cowboy Kent Rollins', ucid:'UClrMJRlvoyoWsVlB-7c61PQ', v:[]},
+  {num:264, name:'Fab Rats', ucid:'UCm6Enc4guGzJyAnQmq9BUSw', v:[]},
+  {num:265, name:'5112 Automotive Studio', ucid:'UCmDNaZuKvOUE7DyI4DcHh2Q', v:[]},
+  {num:266, name:'MrVinylObsessive', ucid:'UCmR81CjsNWkTZwo5odbgG1A', v:[]},
+  {num:267, name:'Michygoss', ucid:'UCmls2_tSsRWantw_39V90lQ', v:[]},
+  {num:268, name:'World Long Drive', ucid:'UCmsxRXS7FN9C8Xkd7u-uzDw', v:[]},
+  {num:269, name:'Zophie Reviews', ucid:'UCn3zVZvx876xjE7RcZjIpkg', v:[]},
+  {num:270, name:'EXOabigdeal', ucid:'UCnPUPyvBxLU7AckK16m9n1w', v:[]},
+  {num:271, name:'The New Yankee Workshop', ucid:'UCnWRRwGB6-QZ9rxcWifx5Lg', v:[]},
+  {num:272, name:'Turnin Rust', ucid:'UCoChKuavVLJwOZmy9R-sHXA', v:[]},
+  {num:273, name:'FROM THE HAMSHACK', ucid:'UCop2iwKOUjQCuK0AYWx8ROQ', v:[]},
+  {num:274, name:'Triple L Rustic Designs', ucid:'UCp4I9qRIkhE5ZzLH1_B3yVw', v:[]},
+  {num:275, name:'colinfurze', ucid:'UCp68_FLety0O-n9QU6phsgw', v:[]},
+  {num:276, name:'SSSniperWolf', ucid:'UCpB959t8iPrxQWj7G6n0ctQ', v:[]},
+  {num:277, name:'Cam Currier', ucid:'UCpBFET_cm6kggHrAm6bF0dA', v:[]},
+  {num:278, name:'Ken Block', ucid:'UCpCJ0y-_y03qPlG4zrYAAvQ', v:[]},
+  {num:279, name:'Brave Gals', ucid:'UCpEWtVQH4THp087jmpmD03Q', v:[]},
+  {num:280, name:'Sous Vide Everything', ucid:'UCpFuaxD-0PKLolFR3gWhrMw', v:[]},
+  {num:281, name:'Ayla Tesler-Mabé', ucid:'UCqY9L3NQInsCY7pJHTVOHlA', v:[]},
+  {num:282, name:'Charly Antolini - Topic', ucid:'UCqrLs5Ylw6CCX1r8EsqI-Bg', v:[]},
+  {num:283, name:'Gingium', ucid:'UCrEUTzd1W__Y5Sb5vSbuZ5g', v:[]},
+  {num:284, name:'Vice Grip Garage', ucid:'UCsfu-jdkX2_v2t3_igVQebg', v:[]},
+  {num:285, name:'PFS Unlisted', ucid:'UCsga1ziQBMA2y2YMaywo2fw', v:[]},
+  {num:286, name:'Mortske Repair', ucid:'UCsrumG5BYDcT8sQccLCSL4Q', v:[]},
+  {num:287, name:'John Malecki Unscrewed', ucid:'UCtR-g66KS3o37mbbSTrNm2Q', v:[]},
+  {num:288, name:'Greasy Fingers', ucid:'UCtT3T6iyA-rSNpBc5Qut3UQ', v:[]},
+  {num:289, name:'Make Something', ucid:'UCtaykeSsGhtn2o2BsPm-rsw', v:[]},
+  {num:290, name:'SHIFT', ucid:'UCtdLtIKzgme3iaYy2n7x7eA', v:[]},
+  {num:291, name:'Rainman Ray Off Duty', ucid:'UCtkIX_ZckgI-ltOEp4m2NCA', v:[]},
+  {num:292, name:'RC Legends', ucid:'UCu0zd2PSYvbUxMir0EJ4acQ', v:[]},
+  {num:293, name:'Rafael Felix', ucid:'UCuI7tcEVzO3EH-UgSFdc4WQ', v:[]},
+  {num:294, name:'J&D Design', ucid:'UCv6csAwMa5c8Er6wra7O_jQ', v:[]},
+  {num:295, name:'SimonFordman', ucid:'UCvHGfNuYBWJW54YRUz_jU_g', v:[]},
+  {num:296, name:'Beyond the press', ucid:'UCveB47lgzZJ1WOf4XYVJNBw', v:[]},
+  {num:297, name:'WatchJRGo', ucid:'UCvv2vYEtk7VSR5iE30WsNbQ', v:[]},
+  {num:298, name:'Matt\'s Off Road Recovery', ucid:'UCwdVOry0oNF9WIe_3uCfz9Q', v:[]},
+  {num:299, name:'Kill Tony', ucid:'UCwzCMiicL-hBUzyjWiJaseg', v:[]},
+  {num:300, name:'Christine McConnell', ucid:'UCxBP2kM134kzwlPC4PLzUzA', v:[]},
+  {num:301, name:'More Mortske Repair', ucid:'UCxE4vRfArDTgQmOLh8v-t1Q', v:[]},
+  {num:302, name:'Official Mr.Wizard\'s World Channel', ucid:'UCx_J_aSKyWaNcEjK-eS4Jxg', v:[]},
+  {num:303, name:'WhistlinDiesel 1000', ucid:'UCxaW7zwRupQmHvRTVpi10PA', v:[]},
+  {num:304, name:'Elevated Fabworks', ucid:'UCyEETaqmowYsN7h9RRj-Cew', v:[]},
+  {num:305, name:'HiFispongebob', ucid:'UCyR4t9pLGzct7w9_M7IkP1w', v:[]},
+  {num:306, name:'ケンリックサウンド - 細井 研志 -- Kenji Hosoi - KENRICK SOUND', ucid:'UCzJBcivuVa0iBJSf7UYTOtw', v:[]}
+];
+
+// All channels combined
+const CHANNELS = [...CAT_CHANNELS, ...SUB_CHANNELS];
+
+// ── SCHEDULE (deterministic) ──
+const SLOT_MS = 30*60*1000, SLOTS = 18, SLOT_PX = 160;
+function seed(id){return String(id).split('').reduce((a,c,i)=>a+c.charCodeAt(0)*(i+7),0)}
+function getSchedule(ch){
+  const vs=ch.v; if(!vs||!vs.length) return null;
+  const s=seed(ch.num);
+  const nowMs=Date.now();
+  const dayMs=Math.floor(nowMs/86400000)*86400000;
+  const slotOfDay=Math.floor((nowMs-dayMs)/SLOT_MS);
+  return {v:vs[(slotOfDay+s)%vs.length], startSec:0};
+}
+function getGuide(ch,startMs){
+  const vs=ch.v; if(!vs||!vs.length) return Array(SLOTS+2).fill('');
+  const s=seed(ch.num);
+  return Array.from({length:SLOTS+2},(_,i)=>{
+    const ms=startMs+i*SLOT_MS;
+    const dayMs=Math.floor(ms/86400000)*86400000;
+    const slotOfDay=Math.floor((ms-dayMs)/SLOT_MS);
+    return vs[(slotOfDay+s)%vs.length].t;
+  });
+}
+function snapSlot(ms){return Math.floor(ms/SLOT_MS)*SLOT_MS}
+function fmtTime(ms){const d=new Date(ms);let h=d.getHours(),m=d.getMinutes();const ap=h>=12?'PM':'AM';h=h%12||12;return`${h}:${String(m).padStart(2,'0')} ${ap}`}
+function fmtClock(){const d=new Date();let h=d.getHours(),m=d.getMinutes(),s=d.getSeconds();const ap=h>=12?'PM':'AM';h=h%12||12;return`${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')} ${ap}`}
+
+// ── RSS LOADER ──
+// Tries multiple CORS proxies in sequence until one works.
+// Results cached in localStorage for 24 hours to avoid re-fetching.
+const PROXIES = [
+  ucid => `https://api.allorigins.win/get?url=${encodeURIComponent('https://www.youtube.com/feeds/videos.xml?channel_id='+ucid)}`,
+  ucid => `https://corsproxy.io/?${encodeURIComponent('https://www.youtube.com/feeds/videos.xml?channel_id='+ucid)}`,
+  ucid => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent('https://www.youtube.com/feeds/videos.xml?channel_id='+ucid)}`,
+];
+
+function parseRSSXML(xml){
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(xml, 'text/xml');
+  const videos = [];
+  doc.querySelectorAll('entry').forEach(e => {
+    // yt:videoId is in a namespace - try multiple selectors
+    let id = e.getElementsByTagName('yt:videoId')[0]?.textContent
+           || e.getElementsByTagNameNS('http://www.youtube.com/xml/schemas/2015','videoId')[0]?.textContent;
+    // Fallback: extract from <id> tag which looks like yt:video:VIDEO_ID
+    if(!id){
+      const idTag = e.querySelector('id')?.textContent || '';
+      const m = idTag.match(/video:([A-Za-z0-9_-]{11})/);
+      if(m) id = m[1];
+    }
+    // Fallback: extract from <link> href
+    if(!id){
+      const href = e.querySelector('link')?.getAttribute('href') || '';
+      const m = href.match(/v=([A-Za-z0-9_-]{11})/);
+      if(m) id = m[1];
+    }
+    const title = e.querySelector('title')?.textContent || '';
+    if(id && title && id.length === 11) videos.push({id:id.trim(), t:title.trim()});
+  });
+  return videos;
+}
+
+const CACHE_KEY = 'cs_feeds_v3';
+const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+
+function loadCache(){
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if(!raw) return {};
+    const {ts, data} = JSON.parse(raw);
+    if(Date.now() - ts > CACHE_TTL) return {};
+    return data || {};
+  } catch(e){ return {}; }
+}
+function saveCache(data){
+  try { localStorage.setItem(CACHE_KEY, JSON.stringify({ts:Date.now(), data})); } catch(e){}
+}
+
+async function fetchChannelVideos(ucid, cache){
+  if(cache[ucid] && cache[ucid].length > 0) return cache[ucid];
+  for(const makeUrl of PROXIES){
+    try {
+      const url = makeUrl(ucid);
+      const r = await fetch(url, {signal: AbortSignal.timeout(10000)});
+      if(!r.ok) continue;
+      // allorigins returns JSON wrapper; others return raw XML
+      const text = await r.text();
+      let xml = text;
+      if(text.trim().startsWith('{')){
+        try { xml = JSON.parse(text).contents || ''; } catch(e){ continue; }
+      }
+      if(!xml || !xml.includes('<entry>')) continue;
+      const videos = parseRSSXML(xml);
+      if(videos.length > 0){
+        cache[ucid] = videos;
+        return videos;
+      }
+    } catch(e){ continue; }
+  }
+  return [];
+}
+
+// ── STATE ──
+let activeCh=null, guideOpen=true, nowMs=Date.now(), guideStart=snapSlot(Date.now())-SLOT_MS;
+function nowPx(){return((nowMs-guideStart)/SLOT_MS)*SLOT_PX}
+
+// ── TIMEBAR ──
+function renderTimebar(){
+  const el=document.getElementById('tb-inner'); el.innerHTML='';
+  for(let i=0;i<SLOTS+2;i++){
+    const t=guideStart+i*SLOT_MS, isNow=(t<=nowMs&&nowMs<t+SLOT_MS);
+    const d=document.createElement('div');
+    d.className='tlabel'+(isNow?' isnow':'');
+    d.style.width=SLOT_PX+'px';
+    d.textContent=(isNow?'▶ ':'')+fmtTime(t);
+    el.appendChild(d);
+  }
+}
+
+// ── ROWS ──
+function renderRows(){
+  const inner=document.getElementById('rows-inner'); inner.innerHTML='';
+  CHANNELS.forEach(ch=>{
+    if(!ch.v||!ch.v.length) return; // skip channels with no videos yet
+    const row=document.createElement('div');
+    row.className='ch-row'+(activeCh?.num===ch.num?' is-active':'');
+    row.dataset.num=ch.num;
+    row.innerHTML=`<div class="ch-label"><div class="ch-num">${ch.num}</div><div class="ch-name">${ch.name}</div></div>`;
+    const slots=document.createElement('div'); slots.className='ch-slots';
+    const titles=getGuide(ch,guideStart);
+    for(let i=0;i<SLOTS+2;i++){
+      const t=guideStart+i*SLOT_MS, isNow=(t<=nowMs&&nowMs<t+SLOT_MS);
+      const s=document.createElement('div');
+      s.className='slot'+(isNow?' is-now':'');
+      s.style.width=SLOT_PX+'px';
+      const txt=document.createElement('div'); txt.className='slot-t'; txt.textContent=titles[i]||''; txt.title=titles[i]||'';
+      s.appendChild(txt); s.addEventListener('click',()=>tune(ch)); slots.appendChild(s);
+    }
+    const line=document.createElement('div'); line.className='now-line'; line.style.left=nowPx()+'px';
+    slots.appendChild(line); row.appendChild(slots);
+    row.addEventListener('click',()=>tune(ch)); inner.appendChild(row);
+  });
+}
+
+// ── TUNE ──
+function tune(ch){
+  activeCh=ch; renderRows();
+  document.getElementById('info-chname').textContent=ch.name;
+  document.getElementById('info-title').textContent='Tuning...';
+  document.getElementById('info-meta').textContent='Ch '+ch.num;
+  const wrap=document.getElementById('player-wrap');
+  document.getElementById('nosig').style.display='flex';
+  const old=wrap.querySelector('iframe'); if(old) old.remove();
+  const sched=getSchedule(ch);
+  if(!sched){document.getElementById('info-title').textContent='No videos available'; return;}
+  document.getElementById('info-title').textContent='"'+sched.v.t+'"';
+  document.getElementById('info-meta').innerHTML='<b>'+fmtClock()+'</b> &nbsp; Ch '+ch.num+' — '+ch.name;
+  document.getElementById('nosig').style.display='none';
+  const iframe=document.createElement('iframe');
+  iframe.src=`https://www.youtube-nocookie.com/embed/${sched.v.id}?autoplay=1&start=0&controls=1&modestbranding=1&rel=0&iv_load_policy=3&loop=1&playlist=${sched.v.id}&origin=${encodeURIComponent(location.origin)}`;
+  iframe.setAttribute('referrerpolicy','no-referrer-when-downgrade');
+  iframe.allow='autoplay; encrypted-media; fullscreen; picture-in-picture';
+  iframe.allowFullscreen=true; iframe.style.opacity='0'; iframe.style.transition='opacity .3s';
+  wrap.appendChild(iframe); requestAnimationFrame(()=>requestAnimationFrame(()=>iframe.style.opacity='1'));
+}
+
+// ── GUIDE TOGGLE ──
+function toggleGuide(){
+  guideOpen=!guideOpen;
+  document.getElementById('guide').style.display=guideOpen?'flex':'none';
+  document.getElementById('gi').textContent=guideOpen?'↑':'↓';
+  document.getElementById('gt').textContent=guideOpen?'HIDE GUIDE':'SHOW GUIDE';
+}
+
+// ── KEYBOARD ──
+document.addEventListener('keydown',e=>{
+  if(e.key==='g'||e.key==='G'){toggleGuide();return;}
+  if(e.key==='ArrowUp'||e.key==='ArrowDown'){
+    e.preventDefault();
+    const visible=CHANNELS.filter(c=>c.v&&c.v.length);
+    const idx=activeCh?visible.findIndex(c=>c.num===activeCh.num):0;
+    const next=e.key==='ArrowUp'?Math.max(0,idx-1):Math.min(visible.length-1,idx+1);
+    tune(visible[next]);
+    setTimeout(()=>document.querySelector(`.ch-row[data-num="${visible[next].num}"]`)?.scrollIntoView({block:'nearest',behavior:'smooth'}),50);
+  }
+});
+
+// ── GAMEPAD ──
+let gps={};
+(function poll(){
+  const pads=navigator.getGamepads?navigator.getGamepads():[];
+  for(const p of pads){if(!p)continue;
+    [[0,'Enter'],[12,'ArrowUp'],[13,'ArrowDown'],[14,'ArrowLeft'],[15,'ArrowRight']].forEach(([b,k])=>{
+      const on=p.buttons[b]?.pressed;
+      if(on&&!gps[b])document.dispatchEvent(new KeyboardEvent('keydown',{key:k}));
+      gps[b]=on;
+    });
+    const ay=p.axes[1]||0;
+    if(ay<-0.6&&!gps.u){document.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowUp'}));gps.u=true;}else if(ay>=-0.6)gps.u=false;
+    if(ay>0.6&&!gps.d){document.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown'}));gps.d=true;}else if(ay<=0.6)gps.d=false;
+  }
+  requestAnimationFrame(poll);
+})();
+
+// ── TOUCH ──
+let ty=0;
+document.addEventListener('touchstart',e=>ty=e.touches[0].clientY,{passive:true});
+document.addEventListener('touchend',e=>{const d=e.changedTouches[0].clientY-ty;if(d<-50)document.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown'}));if(d>50)document.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowUp'}));},{passive:true});
+
+// ── WATCHERS ──
+let w=Math.floor(Math.random()*80)+40;
+setInterval(()=>{w+=Math.floor(Math.random()*7)-3;w=Math.max(15,Math.min(250,w));document.getElementById('sb-w').textContent=w+' watching';},7000);
+
+// ── LAUNCH (after feeds loaded) ──
+function launchApp(){
+  document.getElementById('splash').classList.add('hide');
+  setTimeout(()=>document.getElementById('splash').style.display='none',500);
+  document.getElementById('app').style.display='flex';
+  nowMs=Date.now(); guideStart=snapSlot(nowMs)-SLOT_MS;
+  renderTimebar(); renderRows();
+  const firstWithVideos=CHANNELS.find(c=>c.v&&c.v.length);
+  if(firstWithVideos) setTimeout(()=>tune(firstWithVideos),600);
+  setInterval(()=>{
+    nowMs=Date.now();
+    guideStart=snapSlot(nowMs)-SLOT_MS;
+    renderTimebar(); renderRows();
+  },15000);
+}
+
+// ── STARTUP: load RSS feeds for all subscription channels ──
+(async function loadFeeds(){
+  const bar=document.getElementById('sp-bar');
+  const prog=document.getElementById('sp-prog');
+  const btn=document.getElementById('sp-btn');
+  const total=SUB_CHANNELS.length;
+  let done=0;
+
+  // Load cache first — if we have fresh data, show it immediately
+  const cache = loadCache();
+  const cachedCount = Object.keys(cache).length;
+  if(cachedCount > 50){
+    prog.textContent=`Using cached data (${cachedCount} channels)...`;
+    SUB_CHANNELS.forEach(ch=>{ if(cache[ch.ucid]) ch.v=cache[ch.ucid]; });
+    bar.style.width='100%';
+    setTimeout(launchApp, 600);
+    // Refresh cache in background silently
+    refreshInBackground(cache);
+    return;
+  }
+
+  // Fresh load — batches of 8, try all proxies per channel
+  const BATCH=8;
+  for(let i=0;i<SUB_CHANNELS.length;i+=BATCH){
+    const batch=SUB_CHANNELS.slice(i,i+BATCH);
+    await Promise.all(batch.map(async ch=>{
+      const videos=await fetchChannelVideos(ch.ucid, cache);
+      ch.v=videos;
+      done++;
+      const pct=Math.round((done/total)*100);
+      bar.style.width=pct+'%';
+      prog.textContent=`Loading your channels... ${done} / ${total}`;
+    }));
+    // Save cache incrementally
+    saveCache(cache);
+  }
+
+  const loaded=SUB_CHANNELS.filter(ch=>ch.v.length>0).length;
+  prog.textContent=`✓ Ready — ${loaded} channels loaded`;
+  saveCache(cache);
+  setTimeout(launchApp, 800);
+})();
+
+async function refreshInBackground(cache){
+  const BATCH=8;
+  for(let i=0;i<SUB_CHANNELS.length;i+=BATCH){
+    const batch=SUB_CHANNELS.slice(i,i+BATCH);
+    await Promise.all(batch.map(async ch=>{
+      // Force re-fetch by temporarily clearing cache entry
+      const old=cache[ch.ucid]; delete cache[ch.ucid];
+      const videos=await fetchChannelVideos(ch.ucid, cache);
+      if(videos.length>0) ch.v=videos;
+      else if(old) cache[ch.ucid]=old; // restore if new fetch failed
+    }));
+    saveCache(cache);
+    await new Promise(r=>setTimeout(r,200));
+  }
+}
+</script>
+</body>
+</html>
